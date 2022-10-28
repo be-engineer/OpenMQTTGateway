@@ -195,7 +195,7 @@ boolean PWMtoMQTT() {
   return false;
 }
 
-#  ifdef jsonReceiving
+#  if jsonReceiving
 void MQTTtoPWM(char* topicOri, JsonObject& jsonData) {
   if (cmpToMainTopic(topicOri, subjectMQTTtoPWMset)) {
     Log.trace(F("MQTTtoPWM JSON analysis" CR));
@@ -204,10 +204,10 @@ void MQTTtoPWM(char* topicOri, JsonObject& jsonData) {
     for (int i = 0; i < kNumChannels; ++i) {
       fadeStartValues[i] = currentValues[i];
       JsonVariant value = jsonData[channelJsonKeys[i]];
-      if (value.success()) {
+      if (!value.isNull()) {
         float targetValue = value.as<float>();
-        targetValue = min(targetValue, 1.f);
-        targetValue = max(targetValue, 0.f);
+        targetValue = std::min(targetValue, 1.f);
+        targetValue = std::max(targetValue, 0.f);
         targetValues[i] = targetValue;
 
         // Initially configure as an instantaneous change....
@@ -219,7 +219,7 @@ void MQTTtoPWM(char* topicOri, JsonObject& jsonData) {
     }
     // ...unless there is a "fade" value in the JSON
     JsonVariant fade = jsonData["fade"];
-    if (fade.success()) {
+    if (!fade.isNull()) {
       // "fade" json value is in seconds. Convert to milliseconds
       long endUpdateTime = currentUpdateTime + (long)(fade.as<float>() * (1000.f));
       // Set the fadeEndUpdateTime for the channels that were modified in the JSON
@@ -236,21 +236,21 @@ void MQTTtoPWM(char* topicOri, JsonObject& jsonData) {
       char key[64];
       snprintf(key, sizeof(key), "gamma-%s", channelJsonKeys[i]);
       JsonVariant value = jsonData[key];
-      if (value.success()) {
+      if (!value.isNull()) {
         float gamma = value.as<float>();
         // Sanity check
-        gamma = min(gamma, 4.f);
-        gamma = max(gamma, 0.5f);
+        gamma = std::min(gamma, 4.f);
+        gamma = std::max(gamma, 0.5f);
         calibrationGamma[i] = gamma;
       }
       snprintf(key, sizeof(key), "min-%s", channelJsonKeys[i]);
       value = jsonData[key];
-      if (value.success()) {
+      if (!value.isNull()) {
         calibrationMinLinear[i] = perceptualToLinear(value.as<float>(), i);
       }
       snprintf(key, sizeof(key), "max-%s", channelJsonKeys[i]);
       value = jsonData[key];
-      if (value.success()) {
+      if (!value.isNull()) {
         calibrationMaxLinear[i] = perceptualToLinear(value.as<float>(), i);
       }
     }

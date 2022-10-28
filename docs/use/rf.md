@@ -1,7 +1,42 @@
 
 # RF gateways  (433mhz/315mhz)
 
-Note that for the moment RF, RF2 and Pilight can not be activated on the same boards together.
+## Changing Active Receiver Modules
+
+With version 0.9.7 the ability to switch active signal receiver and decoder is supported between RF, RF2, RTL_433 and Pilight receiver modules.
+
+### Switching Active Receiver Module
+
+Switching of the active receiver module is available between the RF, RF2, RTL_433 and Pilight Gateway modules, allowing for changing of signal decoders without redeploying the openMQTTGateway package.  Sending a JSON message to the command topic of the desired receiver will change the active receiver module.
+
+To enable the RF Gateway module send a json message to the RF Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+
+Example:
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTto433" -m '{"active":true}'`
+
+To enable the PiLight Gateway module send a json message to the PiLight Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+
+Example:
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight" -m '{"active":true}'`
+
+To enable the RF2 Gateway module send a json message to the RF2 Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+
+Example:
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoRF2" -m '{"active":true}'`
+
+To enable the RTL_433 Gateway module send a json message to the RTL_433 Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+
+Example:
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoRTL_433" -m '{"active":true}'`
+
+### Status Messages
+
+The openMQTTGateway status message contains a key `actRec` which is the current active receiver module.
+
+1 - PiLight
+2 - RF
+3 - RTL_433
+4 - RF2
 
 ## RCSwitch based gateway
 
@@ -86,6 +121,29 @@ Subscribe to all the messages with mosquitto or open your MQTT client software:
 Generate your RF signals by pressing a remote button or other and you will see :
 
 ![](../img/OpenMQTTGateway_Pilight_Digoo-DG-R8S.png)
+
+### Limit Protocols
+It is possible to limit the protocols that Pilight will respond to, this can help reduce noise from unwanted devices and in some cases disable conflicting protocols.
+
+#### Available protocols
+To list the available protocols on the Serial - 
+
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols" -m '{"available":true}'`
+#### Limit protocols
+To limit the protocols, send a JSON array of protocols as below - 
+
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols -m '{"limit": ["array", "of", "protocols"]}'`
+
+eg: `mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols" -m '{"limit":["tfa", "ev1527"}'`
+
+#### Reset protocols
+To reset and listen to all protocols -
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols -m '{"reset": true}`'
+
+#### Enabled protocols
+To list the enabled protocols on the Serial - 
+
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols" -m '{"enabled":true}'`
 
 ### Send data by MQTT to transmit a RF signal
 
@@ -177,97 +235,106 @@ Generate your RF signals by pressing a remote button or other and you will see :
 
 ### Send data by MQTT to convert it on KAKU signal 
 
-Once you get the infos publish the parameters with mqtt like that for off:
+Once you get the infos publish the parameters with MQTT like that for off:
 
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoRF2 -m "{"unit":0,"groupBit":0,"period":273,"address":8233228,"switchType":0}"`
 
 for on:
 
-`mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoRF2 -m "{"unit":0,"groupBit":0,"period":273,"adress":8233228,"switchType":1}"`
+`mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoRF2 -m "{"unit":0,"groupBit":0,"period":273,"address":8233228,"switchType":1}"`
 
 ## rtl_433 device decoders
 
-This feature is only available on a ESP32 based device with a CC1101 transceiver connected due to the resource requirements of the rtl_433 device decoders.  At the present time only Pulse Position Modulation (OOK_PPM) and Pulse Width Modulation (OOK_PWM) based decoders are available.
+This feature is only available on a ESP32 based device with a supported transceiver connected due to the resource requirements of the rtl_433 device decoders.  At the present time only Pulse Position Modulation (OOK_PPM) and Pulse Width Modulation (OOK_PWM) based decoders are available.
+
+### Supported hardware combinations
+
+- ESP32 based device with a CC1101 transceiver
+- Heltec WiFi LoRa 32 (V2.1)
+
+### Supported Decoders
 
 ```
-Registering protocol [1] "Silvercrest Remote Control"
-Registering protocol [2] "Rubicson Temperature Sensor"
-Registering protocol [3] "Prologue, FreeTec NC-7104, NC-7159-675 temperature sensor"
-Registering protocol [4] "Waveman Switch Transmitter"
-Registering protocol [8] "LaCrosse TX Temperature / Humidity Sensor"
-Registering protocol [11] "Acurite 609TXC Temperature and Humidity Sensor"
-Registering protocol [15] "KlikAanKlikUit Wireless Switch"
-Registering protocol [16] "AlectoV1 Weather Sensor (Alecto WS3500 WS4500 Ventus W155/W044 Oregon)"
-Registering protocol [17] "Cardin S466-TX2"
-Registering protocol [18] "Fine Offset Electronics, WH2, WH5, Telldus Temperature/Humidity/Rain Sensor"
-Registering protocol [19] "Nexus, FreeTec NC-7345, NX-3980, Solight TE82S, TFA 30.3209 temperature/humidity sensor"
-Registering protocol [21] "Calibeur RF-104 Sensor"
-Registering protocol [25] "Globaltronics GT-WT-02 Sensor"
-Registering protocol [29] "Chuango Security Technology"
-Registering protocol [30] "Generic Remote SC226x EV1527"
-Registering protocol [31] "TFA-Twin-Plus-30.3049, Conrad KW9010, Ea2 BL999"
-Registering protocol [32] "Fine Offset Electronics WH1080/WH3080 Weather Station"
-Registering protocol [34] "LaCrosse WS-2310 / WS-3600 Weather Station"
-Registering protocol [35] "Esperanza EWS"
-Registering protocol [38] "Generic temperature sensor 1"
-Registering protocol [39] "WG-PB12V1 Temperature Sensor"
-Registering protocol [40] "Acurite 592TXR Temp/Humidity, 5n1 Weather Station, 6045 Lightning, 3N1, Atlas"
-Registering protocol [41] "Acurite 986 Refrigerator / Freezer Thermometer"
-Registering protocol [46] "HT680 Remote control"
-Registering protocol [47] "Conrad S3318P, FreeTec NC-5849-913 temperature humidity sensor"
-Registering protocol [48] "Akhan 100F14 remote keyless entry"
-Registering protocol [49] "Quhwa"
-Registering protocol [51] "Skylink HA-434TL motion sensor"
-Registering protocol [53] "Springfield Temperature and Soil Moisture"
-Registering protocol [54] "Oregon Scientific SL109H Remote Thermal Hygro Sensor"
-Registering protocol [55] "Acurite 606TX Temperature Sensor"
-Registering protocol [56] "TFA pool temperature sensor"
-Registering protocol [57] "Kedsum Temperature & Humidity Sensor, Pearl NC-7415"
-Registering protocol [58] "Blyss DC5-UK-WH"
-Registering protocol [68] "Kerui PIR / Contact Sensor"
-Registering protocol [69] "Fine Offset WH1050 Weather Station"
-Registering protocol [73] "LaCrosse TX141-Bv2, TX141TH-Bv2, TX141-Bv3, TX141W, TX145wsdth sensor"
-Registering protocol [74] "Acurite 00275rm,00276rm Temp/Humidity with optional probe"
-Registering protocol [79] "Fine Offset Electronics, WH0530 Temperature/Rain Sensor"
-Registering protocol [84] "Thermopro TP11 Thermometer"
-Registering protocol [85] "Solight TE44/TE66, EMOS E0107T, NX-6876-917"
-Registering protocol [86] "Wireless Smoke and Heat Detector GS 558"
-Registering protocol [87] "Generic wireless motion sensor"
-Registering protocol [91] "inFactory, nor-tec, FreeTec NC-3982-913 temperature humidity sensor"
-Registering protocol [92] "FT-004-B Temperature Sensor"
-Registering protocol [94] "Philips outdoor temperature sensor (type AJ3650)"
-Registering protocol [96] "Nexa"
-Registering protocol [97] "Thermopro TP08/TP12/TP20 thermometer"
-Registering protocol [99] "X10 Security"
-Registering protocol [100] "Interlogix GE UTC Security Devices"
-Registering protocol [108] "Hyundai WS SENZOR Remote Temperature Sensor"
-Registering protocol [109] "WT0124 Pool Thermometer"
-Registering protocol [112] "Ambient Weather TX-8300 Temperature/Humidity Sensor"
-Registering protocol [114] "Maverick et73"
-Registering protocol [115] "Honeywell ActivLink, Wireless Doorbell"
-Registering protocol [121] "Opus/Imagintronix XT300 Soil Moisture"
-Registering protocol [124] "LaCrosse/ELV/Conrad WS7000/WS2500 weather sensors"
-Registering protocol [125] "TS-FT002 Wireless Ultrasonic Tank Liquid Level Meter With Temperature Sensor"
-Registering protocol [126] "Companion WTR001 Temperature Sensor"
-Registering protocol [127] "Ecowitt Wireless Outdoor Thermometer WH53/WH0280/WH0281A"
-Registering protocol [131] "Microchip HCS200 KeeLoq Hopping Encoder based remotes"
-Registering protocol [133] "Rubicson 48659 Thermometer"
-Registering protocol [135] "Philips outdoor temperature sensor (type AJ7010)"
-Registering protocol [137] "Globaltronics QUIGG GT-TMBBQ-05"
-Registering protocol [138] "Globaltronics GT-WT-03 Sensor"
-Registering protocol [141] "Auriol HG02832, HG05124A-DCF, Rubicson 48957 temperature/humidity sensor"
-Registering protocol [145] "WS2032 weather station"
-Registering protocol [146] "Auriol AFW2A1 temperature/humidity sensor"
-Registering protocol [147] "TFA Drop Rain Gauge 30.3233.01"
-Registering protocol [151] "Visonic powercode"
-Registering protocol [152] "Eurochron EFTH-800 temperature and humidity sensor"
-Registering protocol [157] "Missil ML0757 weather station"
-Registering protocol [163] "Acurite 590TX Temperature with optional Humidity"
-Registering protocol [164] "Burnhard BBQ thermometer"
-Registering protocol [165] "TFA Dostmann 30.3221.02 T/H Outdoor Sensor"
-Registering protocol [167] "BlueLine Power Monitor"
-Registering protocol [174] "Bresser Thermo-/Hygro-Sensor 3CH"
-Registering protocol [178] "Proove / Nexa / KlikAanKlikUit Wireless Switch"
+Registering protocol [2] "Acurite 609TXC Temperature and Humidity Sensor"
+Registering protocol [3] "Acurite 592TXR Temp/Humidity, 5n1 Weather Station, 6045 Lightning, 3N1, Atlas"
+Registering protocol [4] "Acurite 986 Refrigerator / Freezer Thermometer"
+Registering protocol [5] "Acurite 606TX Temperature Sensor"
+Registering protocol [6] "Acurite 00275rm,00276rm Temp/Humidity with optional probe"
+Registering protocol [7] "Acurite 590TX Temperature with optional Humidity"
+Registering protocol [8] "Acurite Grill/Meat Thermometer 01185M"
+Registering protocol [9] "Akhan 100F14 remote keyless entry"
+Registering protocol [10] "AlectoV1 Weather Sensor (Alecto WS3500 WS4500 Ventus W155/W044 Oregon)"
+Registering protocol [11] "Ambient Weather TX-8300 Temperature/Humidity Sensor"
+Registering protocol [13] "Auriol AFT 77 B2 temperature sensor"
+Registering protocol [14] "Auriol AFW2A1 temperature/humidity sensor"
+Registering protocol [15] "Auriol AHFL temperature/humidity sensor"
+Registering protocol [16] "Auriol HG02832, HG05124A-DCF, Rubicson 48957 temperature/humidity sensor"
+Registering protocol [18] "Blyss DC5-UK-WH"
+Registering protocol [20] "Bresser Thermo-/Hygro-Sensor 3CH"
+Registering protocol [22] "Burnhard BBQ thermometer"
+Registering protocol [23] "Calibeur RF-104 Sensor"
+Registering protocol [24] "Cardin S466-TX2"
+Registering protocol [25] "Chuango Security Technology"
+Registering protocol [26] "Companion WTR001 Temperature Sensor"
+Registering protocol [29] "Ecowitt Wireless Outdoor Thermometer WH53/WH0280/WH0281A"
+Registering protocol [30] "Eurochron EFTH-800 temperature and humidity sensor"
+Registering protocol [34] "Esperanza EWS"
+Registering protocol [36] "Fine Offset Electronics, WH2, WH5, Telldus Temperature/Humidity/Rain Sensor"
+Registering protocol [37] "Fine Offset Electronics, WH0530 Temperature/Rain Sensor"
+Registering protocol [38] "Fine Offset WH1050 Weather Station"
+Registering protocol [39] "Fine Offset Electronics WH1080/WH3080 Weather Station"
+Registering protocol [41] "FT-004-B Temperature Sensor"
+Registering protocol [42] "Generic wireless motion sensor"
+Registering protocol [43] "Generic Remote SC226x EV1527"
+Registering protocol [44] "Generic temperature sensor 1"
+Registering protocol [45] "Govee Water Leak Dectector H5054, Door Contact Sensor B5023"
+Registering protocol [46] "Globaltronics QUIGG GT-TMBBQ-05"
+Registering protocol [47] "Globaltronics GT-WT-02 Sensor"
+Registering protocol [48] "Globaltronics GT-WT-03 Sensor"
+Registering protocol [49] "Microchip HCS200 KeeLoq Hopping Encoder based remotes"
+Registering protocol [50] "Honeywell ActivLink, Wireless Doorbell"
+Registering protocol [51] "HT680 Remote control"
+Registering protocol [52] "inFactory, nor-tec, FreeTec NC-3982-913 temperature humidity sensor"
+Registering protocol [54] "Interlogix GE UTC Security Devices"
+Registering protocol [56] "Kedsum Temperature & Humidity Sensor, Pearl NC-7415"
+Registering protocol [57] "Kerui PIR / Contact Sensor"
+Registering protocol [58] "LaCrosse TX Temperature / Humidity Sensor"
+Registering protocol [59] "LaCrosse TX141-Bv2, TX141TH-Bv2, TX141-Bv3, TX141W, TX145wsdth sensor"
+Registering protocol [60] "LaCrosse/ELV/Conrad WS7000/WS2500 weather sensors"
+Registering protocol [61] "LaCrosse WS-2310 / WS-3600 Weather Station"
+Registering protocol [63] "Markisol, E-Motion, BOFU, Rollerhouse, BF-30x, BF-415 curtain remote"
+Registering protocol [64] "Maverick et73"
+Registering protocol [66] "Missil ML0757 weather station"
+Registering protocol [68] "Nexus, FreeTec NC-7345, NX-3980, Solight TE82S, TFA 30.3209 temperature/humidity sensor"
+Registering protocol [70] "Opus/Imagintronix XT300 Soil Moisture"
+Registering protocol [71] "Oregon Scientific SL109H Remote Thermal Hygro Sensor"
+Registering protocol [73] "Philips outdoor temperature sensor (type AJ3650)"
+Registering protocol [74] "Philips outdoor temperature sensor (type AJ7010)"
+Registering protocol [75] "Prologue, FreeTec NC-7104, NC-7159-675 temperature sensor"
+Registering protocol [76] "Quhwa"
+Registering protocol [78] "Rubicson Temperature Sensor"
+Registering protocol [79] "Rubicson 48659 Thermometer"
+Registering protocol [80] "Conrad S3318P, FreeTec NC-5849-913 temperature humidity sensor"
+Registering protocol [81] "Silvercrest Remote Control"
+Registering protocol [82] "Skylink HA-434TL motion sensor"
+Registering protocol [83] "Wireless Smoke and Heat Detector GS 558"
+Registering protocol [84] "Solight TE44/TE66, EMOS E0107T, NX-6876-917"
+Registering protocol [85] "Springfield Temperature and Soil Moisture"
+Registering protocol [86] "TFA Dostmann 30.3221.02 T/H Outdoor Sensor"
+Registering protocol [87] "TFA Drop Rain Gauge 30.3233.01"
+Registering protocol [88] "TFA pool temperature sensor"
+Registering protocol [89] "TFA-Twin-Plus-30.3049, Conrad KW9010, Ea2 BL999"
+Registering protocol [90] "Thermopro TP11 Thermometer"
+Registering protocol [91] "Thermopro TP08/TP12/TP20 thermometer"
+Registering protocol [93] "TS-FT002 Wireless Ultrasonic Tank Liquid Level Meter With Temperature Sensor"
+Registering protocol [94] "Visonic powercode"
+Registering protocol [95] "Waveman Switch Transmitter"
+Registering protocol [96] "WG-PB12V1 Temperature Sensor"
+Registering protocol [97] "WS2032 weather station"
+Registering protocol [98] "Hyundai WS SENZOR Remote Temperature Sensor"
+Registering protocol [99] "WT0124 Pool Thermometer"
+Registering protocol [100] "X10 RF"
+Registering protocol [101] "X10 Security"
 ```
 
 ### Change receive frequency
@@ -276,21 +343,16 @@ Default receive frequency of the CC1101 module is 433.92 Mhz, and this can be ca
 
 `home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"mhz":315.026}`
 
-### Minimum Signal Strength
+### Change Signal RSSI Threshold Delta
 
-Default minimum signal strength to enable the receiver is -82, and this setting can be changed with the following command.
+Delta applied to RSSI floor noise level to determine start and end of signal, defaults to 9db.
 
-`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"rssi":-75}`
+`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"rssi": 9}`
 
-### Enable rtl_433 device decoder verbose debug
-
-This function does not work when all available decoders are enabled and triggers an out of memory restart.
-
-`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"debug":4}`
 
 ### Retrieve current status of receiver
 
-`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"status":-1}`
+`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"status":1}`
 
 ```
 {"model":"status",
@@ -298,14 +360,17 @@ This function does not work when all available decoders are enabled and triggers
 "debug":0,                  - rtl_433 verbose setting
 "duration":11799327,        - duration of current signal
 "Gap length":-943575,       - duration of gap between current signal
-"signalRssi":-38,           - most recent received signal strength
+"rssi":-38,                 - most recent received signal strength
 "train":1,                  - signal processing train #
 "messageCount":3,           - total number of signals received
-"_enabledReceiver":1,       - which recevier is enabled
+"totalSignals":9,           - RegOokFix signal quality count ( of 10 )
+"ignoredSignals":0,         - RegOokFix signal quality ignored signals
+"unparsedSignals":3,        - RegOokFix signal quality unparseable signals
+"_enabledReceiver":1,       - which receiver is enabled
 "receiveMode":0,            - is the receiver currently receiving a signal
 "currentRssi":-89,          - current rssi level
-"minimumRssi":-82,          - minimum rssi level to start signal processing
-"pulses":0,                 - how many pulses have been recieved in the current signal
+"rssiThreshold":-82,        - minimum rssi level to start signal processing
+"pulses":0,                 - how many pulses have been received in the current signal
 "StackHighWaterMark":5528,  - ESP32 Stack
 "freeMem":112880}           - ESP32 memory available
 ```

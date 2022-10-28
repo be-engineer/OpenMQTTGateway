@@ -49,14 +49,20 @@ void setupLORA() {
   Log.notice(F("LORA_SS: %d" CR), LORA_SS);
   Log.notice(F("LORA_RST: %d" CR), LORA_RST);
   Log.notice(F("LORA_DI0: %d" CR), LORA_DI0);
+  LoRa.setTxPower(LORA_TX_POWER);
+  LoRa.setSpreadingFactor(LORA_SPREADING_FACTOR);
+  LoRa.setSignalBandwidth(LORA_SIGNAL_BANDWIDTH);
+  LoRa.setCodingRate4(LORA_CODING_RATE);
+  LoRa.setPreambleLength(LORA_PREAMBLE_LENGTH);
+  LoRa.setSyncWord(LORA_SYNC_WORD);
   Log.trace(F("ZgatewayLORA setup done" CR));
 }
 
 void LORAtoMQTT() {
   int packetSize = LoRa.parsePacket();
   if (packetSize) {
-    StaticJsonBuffer<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject& LORAdata = jsonBuffer.createObject();
+    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
+    JsonObject LORAdata = jsonBuffer.to<JsonObject>();
     Log.trace(F("Rcv. LORA" CR));
 #  ifdef ESP32
     String taskMessage = "LORA Task running on core ";
@@ -68,11 +74,11 @@ void LORAtoMQTT() {
     for (int i = 0; i < packetSize; i++) {
       packet += (char)LoRa.read();
     }
-    LORAdata.set("rssi", (int)LoRa.packetRssi());
-    LORAdata.set("snr", (float)LoRa.packetSnr());
-    LORAdata.set("pferror", (float)LoRa.packetFrequencyError());
-    LORAdata.set("packetSize", (int)packetSize);
-    LORAdata.set("message", (char*)packet.c_str());
+    LORAdata["rssi"] = (int)LoRa.packetRssi();
+    LORAdata["snr"] = (float)LoRa.packetSnr();
+    LORAdata["pferror"] = (float)LoRa.packetFrequencyError();
+    LORAdata["packetSize"] = (int)packetSize;
+    LORAdata["message"] = (char*)packet.c_str();
     pub(subjectLORAtoMQTT, LORAdata);
     if (repeatLORAwMQTT) {
       Log.trace(F("Pub LORA for rpt" CR));
@@ -81,7 +87,7 @@ void LORAtoMQTT() {
   }
 }
 
-#  ifdef jsonReceiving
+#  if jsonReceiving
 void MQTTtoLORA(char* topicOri, JsonObject& LORAdata) { // json object decoding
   if (cmpToMainTopic(topicOri, subjectMQTTtoLORA)) {
     Log.trace(F("MQTTtoLORA json" CR));
@@ -115,7 +121,7 @@ void MQTTtoLORA(char* topicOri, JsonObject& LORAdata) { // json object decoding
   }
 }
 #  endif
-#  ifdef simpleReceiving
+#  if simpleReceiving
 void MQTTtoLORA(char* topicOri, char* LORAdata) { // json object decoding
   if (cmpToMainTopic(topicOri, subjectMQTTtoLORA)) {
     LoRa.beginPacket();
