@@ -29,6 +29,14 @@
 #include "User_config.h"
 
 #ifdef ZactuatorONOFF
+unsigned long timeinttemp = 0;
+
+void setupONOFF() {
+  pinMode(ACTUATOR_ONOFF_GPIO, OUTPUT);
+#  ifdef ACTUATOR_ONOFF_DEFAULT
+  digitalWrite(ACTUATOR_ONOFF_GPIO, ACTUATOR_ONOFF_DEFAULT);
+#  endif
+}
 
 #  if jsonReceiving
 void MQTTtoONOFF(char* topicOri, JsonObject& ONOFFdata) {
@@ -96,15 +104,42 @@ void MQTTtoONOFF(char* topicOri, char* datacallback) {
 }
 #  endif
 
-void ActuatorButtonTrigger() {
-  uint8_t level = !digitalRead(ACTUATOR_ONOFF_GPIO);
-  char* level_string = "ON";
-  if (level != ACTUATOR_ON) {
-    level_string = "OFF";
+//Check regularly temperature of the ESP32 board and switch OFF the relay if temperature is more than MAX_TEMP_ACTUATOR
+#  ifdef MAX_TEMP_ACTUATOR
+void OverHeatingRelayOFF() {
+#    if defined(ESP32) && !defined(NO_INT_TEMP_READING)
+  if (millis() > (timeinttemp + TimeBetweenReadingIntTemp)) {
+    static float previousInternalTempc = 0;
+    float internalTempc = intTemperatureRead();
+    Log.trace(F("Internal temperature of the ESP32 %F" CR), internalTempc);
+    // We switch OFF the actuator if the temperature of the ESP32 is more than MAX_TEMP_ACTUATOR two consecutive times, so as to avoid false single readings to trigger the relay OFF.
+    if (internalTempc > MAX_TEMP_ACTUATOR && previousInternalTempc > MAX_TEMP_ACTUATOR && digitalRead(ACTUATOR_ONOFF_GPIO) == ACTUATOR_ON) {
+      Log.error(F("[ActuatorONOFF] OverTemperature detected ( %F > %F ) switching OFF Actuator" CR), internalTempc, MAX_TEMP_ACTUATOR);
+      ActuatorTrigger();
+    }
+    previousInternalTempc = internalTempc;
+    timeinttemp = millis();
   }
-  Log.trace(F("Actuator triggered %s by button" CR), level_string);
+#    endif
+}
+#  else
+void OverHeatingRelayOFF() {}
+#  endif
+
+/*
+  Handling of actuator control following the cases below:
+  -Button press, if the button goes to ACTUATOR_BUTTON_TRIGGER_LEVEL we change the Actuator level
+  -Status less switch state change (a switch without ON OFF labels), an action of this type of switch will trigger a change of the actuator state independently from the switch position
+*/
+void ActuatorTrigger() {
+  uint8_t level = !digitalRead(ACTUATOR_ONOFF_GPIO);
+  Log.trace(F("Actuator triggered %d" CR), level);
   digitalWrite(ACTUATOR_ONOFF_GPIO, level);
-  pub(subjectGTWONOFFtoMQTT, level_string);
+  // Send the state of the switch to the broker so as to update the status
+  StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
+  JsonObject ONOFFdata = jsonBuffer.to<JsonObject>();
+  ONOFFdata["cmd"] = (int)level;
+  pub(subjectGTWONOFFtoMQTT, ONOFFdata);
 }
 
 #endif

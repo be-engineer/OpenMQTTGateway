@@ -32,7 +32,6 @@ Thanks to wolass https://github.com/wolass for suggesting me HM 10 and dinosd ht
 
 #ifdef ZgatewayBT
 
-#  include "FreeRTOS.h"
 SemaphoreHandle_t semaphoreCreateOrUpdateDevice;
 SemaphoreHandle_t semaphoreBLEOperation;
 QueueHandle_t BLEQueue;
@@ -46,9 +45,8 @@ QueueHandle_t BLEQueue;
 #  include <esp_bt.h>
 #  include <esp_bt_main.h>
 #  include <esp_wifi.h>
-#  include <stdatomic.h>
 
-#  include <vector>
+#  include <atomic>
 
 #  include "ZgatewayBLEConnect.h"
 #  include "soc/timer_group_reg.h"
@@ -58,12 +56,6 @@ using namespace std;
 
 // Global struct to store live BT configuration data
 BTConfig_s BTConfig;
-
-#  define device_flags_init     0 << 0
-#  define device_flags_isDisc   1 << 0
-#  define device_flags_isWhiteL 1 << 1
-#  define device_flags_isBlackL 1 << 2
-#  define device_flags_connect  1 << 3
 
 TheengsDecoder decoder;
 
@@ -90,6 +82,7 @@ static bool oneWhite = false;
 void BTConfig_init() {
   BTConfig.bleConnect = AttemptBLEConnect;
   BTConfig.BLEinterval = TimeBtwRead;
+  BTConfig.activeScan = ActiveBLEScan;
   BTConfig.BLEscanBeforeConnect = ScanBeforeConnect;
   BTConfig.pubOnlySensors = PublishOnlySensors;
   BTConfig.presenceEnable = HassPresence;
@@ -99,11 +92,7 @@ void BTConfig_init() {
   BTConfig.extDecoderEnable = UseExtDecoder;
   BTConfig.extDecoderTopic = MQTTDecodeTopic;
   BTConfig.filterConnectable = BLE_FILTER_CONNECTABLE;
-  BTConfig.pubKnownServiceData = pubKnownBLEServiceData;
-  BTConfig.pubUnknownServiceData = pubUnknownBLEServiceData;
-  BTConfig.pubKnownManufData = pubBLEManufacturerData;
-  BTConfig.pubUnknownManufData = pubUnknownBLEManufacturerData;
-  BTConfig.pubServiceDataUUID = pubBLEServiceUUID;
+  BTConfig.pubAdvData = pubBLEAdvData;
   BTConfig.pubBeaconUuidForTopic = useBeaconUuidForTopic;
   BTConfig.ignoreWBlist = false;
 }
@@ -123,11 +112,13 @@ void BTConfig_update(JsonObject& data, const char* key, T& var) {
 }
 
 void BTConfig_fromJson(JsonObject& BTdata, bool startup = false) {
-  // Attempts to connect to elligible devices or not
+  // Attempts to connect to eligible devices or not
   BTConfig_update(BTdata, "bleconnect", BTConfig.bleConnect);
   // Scan interval set
   if (BTdata.containsKey("interval") && BTdata["interval"] != 0)
     BTConfig_update(BTdata, "interval", BTConfig.BLEinterval);
+  // Define if the scan is active or passive
+  BTConfig_update(BTdata, "activescan", BTConfig.activeScan);
   // Number of scan before a connect set
   BTConfig_update(BTdata, "scanbcnct", BTConfig.BLEscanBeforeConnect);
   // publish all BLE devices discovered or  only the identified sensors (like temperature sensors)
@@ -146,16 +137,8 @@ void BTConfig_fromJson(JsonObject& BTdata, bool startup = false) {
   BTConfig_update(BTdata, "extDecoderTopic", BTConfig.extDecoderTopic);
   // Sets whether to filter publishing
   BTConfig_update(BTdata, "filterConnectable", BTConfig.filterConnectable);
-  // Publish service data belonging to recognised sensors
-  BTConfig_update(BTdata, "pubKnownServiceData", BTConfig.pubKnownServiceData);
-  // Publish service data belonging to unrecognised sensors
-  BTConfig_update(BTdata, "pubUnknownServiceData", BTConfig.pubUnknownServiceData);
-  // Publish known manufacturer's data
-  BTConfig_update(BTdata, "pubKnownManufData", BTConfig.pubKnownManufData);
-  // Publish unknown manufacturer's data
-  BTConfig_update(BTdata, "pubUnknownManufData", BTConfig.pubUnknownManufData);
-  // Publish the service UUID data
-  BTConfig_update(BTdata, "pubServiceDataUUID", BTConfig.pubServiceDataUUID);
+  // Publish advertisment data
+  BTConfig_update(BTdata, "pubadvdata", BTConfig.pubAdvData);
   // Use iBeacon UUID as topic, instead of sender (random) MAC address
   BTConfig_update(BTdata, "pubBeaconUuidForTopic", BTConfig.pubBeaconUuidForTopic);
   // Disable Whitelist & Blacklist
@@ -165,6 +148,7 @@ void BTConfig_fromJson(JsonObject& BTdata, bool startup = false) {
   JsonObject jo = jsonBuffer.to<JsonObject>();
   jo["bleconnect"] = BTConfig.bleConnect;
   jo["interval"] = BTConfig.BLEinterval;
+  jo["activescan"] = BTConfig.activeScan;
   jo["scanbcnct"] = BTConfig.BLEscanBeforeConnect;
   jo["onlysensors"] = BTConfig.pubOnlySensors;
   jo["hasspresence"] = BTConfig.presenceEnable;
@@ -174,11 +158,7 @@ void BTConfig_fromJson(JsonObject& BTdata, bool startup = false) {
   jo["extDecoderEnable"] = BTConfig.extDecoderEnable;
   jo["extDecoderTopic"] = BTConfig.extDecoderTopic;
   jo["filterConnectable"] = BTConfig.filterConnectable;
-  jo["pubKnownServiceData"] = BTConfig.pubKnownServiceData;
-  jo["pubUnknownServiceData"] = BTConfig.pubUnknownServiceData;
-  jo["pubKnownManufData"] = BTConfig.pubKnownManufData;
-  jo["pubUnknownManufData"] = BTConfig.pubUnknownManufData;
-  jo["pubServiceDataUUID"] = BTConfig.pubServiceDataUUID;
+  jo["pubadvdata"] = BTConfig.pubAdvData;
   jo["pubBeaconUuidForTopic"] = BTConfig.pubBeaconUuidForTopic;
   jo["ignoreWBlist"] = BTConfig.ignoreWBlist;
 
@@ -188,7 +168,7 @@ void BTConfig_fromJson(JsonObject& BTdata, bool startup = false) {
     Serial.println();
     return; // Do not try to erase/write/send config at startup
   }
-  pub("/commands/BTtoMQTT/config", jo);
+  pub(subjectBTtoMQTT, jo);
 
   if (BTdata.containsKey("erase") && BTdata["erase"].as<bool>()) {
     // Erase config from NVS (non-volatile storage)
@@ -225,7 +205,7 @@ void BTConfig_load() {
     return;
   }
   JsonObject jo = jsonBuffer.as<JsonObject>();
-  BTConfig_fromJson(jo, true); // Never send mqtt message with config
+  BTConfig_fromJson(jo, true); // Never send MQTT message with config
   Log.notice(F("BT config loaded" CR));
 }
 
@@ -329,8 +309,6 @@ void emptyBTQueue() {
   }
 }
 
-bool ProcessLock = false; // Process lock when we want to use a critical function like OTA for example
-
 void createOrUpdateDevice(const char* mac, uint8_t flags, int model, int mac_type = 0);
 
 BLEdevice* getDeviceByMac(const char* mac); // Declared here to avoid pre-compilation issue (misplaced auto declaration by pio)
@@ -410,10 +388,6 @@ void createOrUpdateDevice(const char* mac, uint8_t flags, int model, int mac_typ
 
   xSemaphoreGive(semaphoreCreateOrUpdateDevice);
 }
-
-#  define isWhite(device)      device->isWhtL
-#  define isBlack(device)      device->isBlkL
-#  define isDiscovered(device) device->isDisc
 
 void dumpDevices() {
   for (vector<BLEdevice*>::iterator it = devices.begin(); it != devices.end(); ++it) {
@@ -554,6 +528,7 @@ void procBLETask(void* pvParameters) {
       mac_adress.toUpperCase();
       BLEdata["id"] = (char*)mac_adress.c_str();
       BLEdata["mac_type"] = advertisedDevice->getAddress().getType();
+      BLEdata["adv_type"] = advertisedDevice->getAdvType();
       Log.notice(F("Device detected: %s" CR), (char*)mac_adress.c_str());
       BLEdevice* device = getDeviceByMac(BLEdata["id"].as<const char*>());
 
@@ -614,7 +589,7 @@ void BLEscan() {
   BLEScan* pBLEScan = BLEDevice::getScan();
   MyAdvertisedDeviceCallbacks myCallbacks;
   pBLEScan->setAdvertisedDeviceCallbacks(&myCallbacks);
-  pBLEScan->setActiveScan(ActiveBLEScan);
+  pBLEScan->setActiveScan(BTConfig.activeScan);
   pBLEScan->setInterval(BLEScanInterval);
   pBLEScan->setWindow(BLEScanWindow);
   BLEScanResults foundDevices = pBLEScan->start(Scan_duration / 1000, false);
@@ -792,6 +767,7 @@ void setupBT() {
   Log.notice(F("BLE scans interval: %d" CR), BTConfig.BLEinterval);
   Log.notice(F("BLE scans number before connect: %d" CR), BTConfig.BLEscanBeforeConnect);
   Log.notice(F("Publishing only BLE sensors: %T" CR), BTConfig.pubOnlySensors);
+  Log.notice(F("Active BLE scan: %T" CR), BTConfig.activeScan);
   Log.notice(F("minrssi: %d" CR), -abs(BTConfig.minRssi));
   Log.notice(F("Low Power Mode: %d" CR), lowpowermode);
 
@@ -834,13 +810,6 @@ void setupBT() {
 bool BTtoMQTT() { // for on demand BLE scans
   BLEscan();
   return true;
-}
-
-void RemoveJsonPropertyIf(JsonObject& obj, const char* key, bool condition) {
-  if (condition) {
-    Log.trace(F("Removing %s" CR), key);
-    obj.remove(key);
-  }
 }
 
 boolean valid_service_data(const char* data, int size) {
@@ -955,14 +924,15 @@ void launchBTDiscovery(bool overrideDiscovery) {
 void PublishDeviceData(JsonObject& BLEdata, bool processBLEData) {
   if (abs((int)BLEdata["rssi"] | 0) < abs(BTConfig.minRssi)) { // process only the devices close enough
     if (processBLEData) process_bledata(BLEdata);
-    if (!BTConfig.pubOnlySensors || BLEdata.containsKey("model") || BLEdata.containsKey("distance")) {
-      RemoveJsonPropertyIf(BLEdata, "servicedatauuid", !BTConfig.pubServiceDataUUID && BLEdata.containsKey("model"));
-      RemoveJsonPropertyIf(BLEdata, "servicedata", !BTConfig.pubKnownServiceData && BLEdata.containsKey("model"));
-      RemoveJsonPropertyIf(BLEdata, "manufacturerdata", !BTConfig.pubKnownManufData && BLEdata.containsKey("model"));
+    if (!BTConfig.pubAdvData) {
+      BLEdata.remove("servicedatauuid");
+      BLEdata.remove("servicedata");
+      BLEdata.remove("manufacturerdata");
+      BLEdata.remove("mac_type");
+      BLEdata.remove("adv_type");
+    }
+    if (!BTConfig.pubOnlySensors || BLEdata.containsKey("model") || BLEdata.containsKey("distance")) { // Identified device
       pubBT(BLEdata);
-    } else {
-      RemoveJsonPropertyIf(BLEdata, "servicedata", !BTConfig.pubUnknownServiceData);
-      RemoveJsonPropertyIf(BLEdata, "manufacturerdata", !BTConfig.pubUnknownManufData && BLEdata.containsKey("model"));
     }
   } else if (BLEdata.containsKey("distance")) {
     pubBT(BLEdata);
@@ -975,7 +945,9 @@ void process_bledata(JsonObject& BLEdata) {
   const char* mac = BLEdata["id"].as<const char*>();
   int model_id = BTConfig.extDecoderEnable ? -1 : decoder.decodeBLEJson(BLEdata);
   int mac_type = BLEdata["mac_type"].as<int>();
-  if (model_id >= 0) { // Broadcaster devices
+  if (model_id >= 0 && model_id != TheengsDecoder::BLE_ID_NUM::IBEACON &&
+      model_id != TheengsDecoder::BLE_ID_NUM::MS_CDP &&
+      model_id != TheengsDecoder::BLE_ID_NUM::GAEN) { // Broadcaster devices
     Log.trace(F("Decoder found device: %s" CR), BLEdata["model_id"].as<const char*>());
     if (model_id == TheengsDecoder::BLE_ID_NUM::HHCCJCY01HHCC) {
       createOrUpdateDevice(mac, device_flags_connect, model_id, mac_type); // Device that broadcast and can be connected
