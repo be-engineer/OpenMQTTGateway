@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
    This files enables to set your parameter for the DHT11/22 sensor
@@ -27,7 +27,8 @@
 #define config_DHT_h
 
 extern void setupDHT();
-extern void DHTtoMQTT();
+extern void MeasureTempAndHum();
+
 /*----------------------------USER PARAMETERS-----------------------------*/
 /*-------------DEFINE YOUR MQTT PARAMETERS BELOW----------------*/
 #define DHTTOPIC              "/DHTtoMQTT/dht1"
@@ -36,7 +37,9 @@ extern void DHTtoMQTT();
 /*-------------DHT SENSOR TYPE-------------*/
 //#define DHT_SENSOR_TYPE DHT11 //uncomment for DHT11 Sensor
 //#define DHT_SENSOR_TYPE DHT21 //uncomment for DHT21 Sensor
-#define DHT_SENSOR_TYPE DHT22 //uncomment for DHT22 Sensor (default for backwards compatibility)
+#ifndef DHT_SENSOR_TYPE
+#  define DHT_SENSOR_TYPE DHT22 //uncomment for DHT22 Sensor (default for backwards compatibility)
+#endif
 /*-------------------PIN DEFINITIONS----------------------*/
 #ifndef DHT_RECEIVER_GPIO
 #  if defined(ESP8266)

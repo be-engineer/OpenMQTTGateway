@@ -2,15 +2,9 @@
 
 ## Introduction
 
-This section is useful if you want to do advanced configuration of your project or if you choose an Arduino. Indeed the ESP hardware family can be loaded directly without any configuration from your desktop.
+This section is useful if you want to make an advanced project configuration not supported by the pre-built binaries.
 
 Advanced configuration means changing the default pins, the MQTT topics, and all the expert parameters that you can find in [`User_config.h`](https://github.com/1technophile/OpenMQTTGateway/blob/development/main/User_config.h) and in all [`config_XX.h`](https://github.com/1technophile/OpenMQTTGateway/tree/development/main) files. If you don't have to change the default parameters except Wi-Fi and MQTT broker settings, you don't need advanced configuration; you can go directly to the [Upload Binaries](binaries.md) section instead.
-
-To make advanced configurations to OpenMQTTGateway, you have the choice between two development environments:
-* [PlatformIO](https://platformio.org/)
-* [Arduino IDE](https://www.arduino.cc/en/Main/Software)
-
-I recommend using PlatformIO; this way you will not have to search for all the necessary libraries and adequate forks/revisions. If you really want to use Arduino IDE, you need to download the libraries listed [here](https://github.com/1technophile/OpenMQTTGateway/blob/d2dd6138558909b71cc44f69665340247bd5f356/platformio.ini#L55) at the version or revision specified.
 
 ## Configure & Upload with PlatformIO
 
@@ -24,7 +18,7 @@ PlatformIO config files work on the concept of overriding. At first, a very simp
 [env]
 framework = arduino
 lib_deps =
-  ${libraries.pubsubclient}
+  ${libraries.picomqtt}
   ${libraries.arduinojson}
   ${libraries.arduinolog}
 build_flags =
@@ -42,12 +36,11 @@ build_flags =
   ${env.build_flags}        ; Inherit all the build flags from [env]
   '-DsimpleReceiving=true'  ; Add some of our own build flags
   '-DZmqttDiscovery="HADiscovery"'
-  '-DTRACE=1'
   ;'-DCORE_DEBUG_LEVEL=4'
 ```
 Here, build flags starting with "-D" let us set configuration values you would normally find in `User_config.h` and `config_xx.h` files by specifying them here, overriding the default values set in those files. To include special characters, you can triple escape them with a backslash like so:
 ```ini
-  -Dwifi_password=\"Cato\\\'sYounger\\\$on\" ; Cato'sYounger$on
+  '-Dwifi_password="Cato\\\'sYounger\\\$on"' ; Cato'sYounger$on
 ```
 
 The different listed configurations in `platformio.ini` represent some standard environments and boards. For example, the environment
@@ -84,17 +77,18 @@ build_flags =
   '-DGateway_Name="OpenMQTTGateway"'
   '-DZsensorBME280="BME280"'
   '-DBase_Topic="rf/"'
+  '-DESPWifiManualSetup=true'
   '-Dwifi_ssid="mynetwork"'
-  -Dwifi_password=\"Cato\\\'sYounger\\\$on\" ; Cato'sYounger$on
+  '-Dwifi_password="Cato\\\'sYounger\\\$on"' ; Cato'sYounger$on
   '-DMQTT_USER="mqttusername"'
   '-DMQTT_PASS="mqttpassword"'
   '-DMQTT_SERVER="mqttserver.local"'
-  '-Dota_password="otapassword"'
+  '-Dgw_password="12345678"'
   '-DLED_RECEIVE=LED_BUILTIN'        ; Comment 1
   '-DLED_RECEIVE_ON=LOW'             ; Comment 2
   '-DRF_RECEIVER_GPIO=13'
   '-DRF_EMITTER_GPIO=15'
-  '-DsimpleReceiving=false'          
+  '-DsimpleReceiving=false'
   '-UZmqttDiscovery'                 ; Disable HA discovery
 monitor_speed = 115200
 
@@ -106,6 +100,25 @@ upload_flags =
   --auth=otapassword
   --port=8266
 ```
+
+::: warning Note
+Adding manual WiFi and MQTT credentials to an environment also requires to define
+`'-DESPWifiManualSetup=true'`
+for the credentials to be registered correctly.
+:::
+
+::: warning Note
+Manual network configuration (IP, netmask, gateway, DNS) requires to define
+`'-DNetworkAdvancedSetup=true'`
+and related network parameters, e.g.:
+```
+'-DNET_IP="192.168.1.99"'
+'-DNET_MASK="255.255.255.0"'
+'-DNET_GW="192.168.1.1"'
+'-DNET_DNS="1.1.1.1"'
+```
+:::
+
 The first new environment we create, `nodemcuv2-pilight-bme280`, inherits the default `nodemcuv2-pilight` environment in `platformio.ini` with the `extends = env:nodemcuv2-pilight` line. In the `lib_deps` section, it imports all the `lib_deps` of `nodemcuv2-pilight` with the `${env:nodemcuv2-pilight.lib_deps}` line, and adds BME280 on top of it. (Since the environment we're extending already has this `lib_deps` attribute, specifying it again would normally replace it completely with our new attribute; instead, to keep its value but simply append to it, we import the original in the beginning of our `lib_deps` attribute.) In the `build_flags` section, it again imports all the `build_flags` of `nodemcuv2-pilight` and many of its own overrides, e.g. changing `Base_Topic` found in `User_config.h` from the default to "rf/" by using the `'-DBase_Topic="rf/"'` line. It also unsets previously set configurations (i.e. `mqttDiscovery`) by using `'-UZmqttDiscovery'`. This environment will work over serial upload.
 
 The second new environment, `nodemcuv2-pilight-bme280-ota`, inherits everything we specified in the first environment (with the line `extends = env:nodemcuv2-pilight-bme280`), but modifies it to upload over OTA (Wi-Fi). We also specified this as the `default_env` in the beginning of the file, so PlatformIO will choose this environment to build and upload if we don't specify otherwise.
@@ -142,7 +155,7 @@ board = esp32dev
 lib_deps =
   ${com-esp.lib_deps}
   ${libraries.rc-switch}
-build_flags = 
+build_flags =
   ${com-esp.build_flags}
   '-DZgatewayRF="RF"'
   '-DZgatewayIR="IR"'
@@ -165,7 +178,7 @@ This can be useful especially before the first upload or when you change the boa
 
 Once done the gateway should connect to your network and your broker, you should see it into the broker in the form of the following messages:
 ```
-home/OpenMQTTGateway/LWT Online 
+home/OpenMQTTGateway/LWT Online
 home/OpenMQTTGateway/version
 ```
 
@@ -190,38 +203,6 @@ upload_flags =
   --port=8266
 ```
 
-## Configure & Upload with Arduino IDE
-
-* Download the [CODE](https://github.com/1technophile/OpenMQTTGateway/releases) from github
-* First download the last version of the Arduino IDE from the Arduino [website](https://www.arduino.cc/en/Main/Software)
-* Add ESP32 boards by following this [tutorial](https://docs.espressif.com/projects/arduino-esp32/en/latest/installing.html#installing-using-arduino-ide)
-* Add ESP8266 boards by following this [tutorial](https://github.com/esp8266/Arduino#installing-with-boards-manager)
-* Download the libraries package corresponding to your board and module wished into the same page (example esp32-m5stick-c-ble-libraries.zip)
-* Unzip the libraries into your Arduino libraries folder (example D:/Users/XXXX/Documents/Arduino/libraries)
-* If necessary replace the spaces into each library folder by _: example rename “ESP32 BLE Arduino” folder to “ESP32_BLE_Arduino”
-* Open the file main.ino from OpenMQTTGateway/main folder with the Arduino IDE
-* Change the settings and the desired gateways into `User_config.h` (uncomment the modules you want)
-
-*Example for the use of RF gateway:*
-
-```cpp
-#define ZgatewayRF "RF" //ESP8266, Arduino, ESP32
-//#define ZgatewayIR "IR" //ESP8266, Arduino, Sonoff RF Bridge
-//#define ZgatewayLORA "LORA" //ESP8266, Arduino, ESP32
-//#define ZgatewayPilight "Pilight" //ESP8266, Arduino, ESP32
-//#define ZgatewayBT "BT" //ESP8266, ESP32
-```
-
-* Change the pins or parameters corresponding to the modules chosen, for RF you can change the pins in config_RF.h
-* Choose the board on the Arduino IDE
-* Select the port corresponding to the board
-* Note that for using BLE on ESP32 you will need to select *Minimal SPIFFS* into Tools->Partition Scheme
-* Open the serial monitor and set 115200 bauds
-* Upload ➡️
-* You should see the logs in the serial monitor
-
-With an ESP if you did not set your network and MQTT parameters manually you can now open the [web portal configuration](portal.md).
-
 ## API
 With the V0.9 we added the support of json for receiving and publishing.
 Per default Json reception and Json publication is activated, the previous simple reception mode is also activated to avoid regression on commands.
@@ -231,7 +212,7 @@ You can deactivate Json or simple mode following theses instructions:
 #define jsonPublishing true //define false if you don't want to use Json publishing (one topic for all the parameters)
 //example home/OpenMQTTGateway_ESP32_DEVKIT/BTtoMQTT/4XXXXXXXXXX4 {"rssi":-63,"servicedata":"fe0000000000000000000000000000000000000000"}
 #define simplePublishing false //define true if you want to use simple publishing (one topic for one parameter)
-//example 
+//example
 // home/OpenMQTTGateway_ESP32_DEVKIT/BTtoMQTT/4XXXXXXXXXX4/rssi -63.0
 // home/OpenMQTTGateway_ESP32_DEVKIT/BTtoMQTT/4XXXXXXXXXX4/servicedata fe0000000000000000000000000000000000000000
 #define simpleReceiving true //define false if you don't want to use old way reception analysis
@@ -252,7 +233,7 @@ Note that depending on the environment the default platformio.ini has common opt
 [com-esp]
 ```
 
-If you want to use HASS MQTT discovery you need to have 
+If you want to use HASS MQTT discovery you need to have
 `#define jsonPublishing true`
 &
 `#define ZmqttDiscovery "HADiscovery"`

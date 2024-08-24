@@ -1,42 +1,185 @@
+---
+title: RF gateways (RTL_433/RCSwitch/RF/RF2)
+description: Unlock the potential of RF 433 MHz technology with our universal gateway. Decode signals from various devices, and integrate seamlessly with MQTT systems and controllers like Home Assistant and OpenHAB.
+---
 
-# RF gateways  (433mhz/315mhz)
+# RF gateways (433mhz/315mhz/868mhz/915mhz)
 
-## Changing Active Receiver Modules
+## What is an RF gateway
 
-With version 0.9.7 the ability to switch active signal receiver and decoder is supported between RF, RF2, RTL_433 and Pilight receiver modules.
+An RF (Radio Frequency) gateway is a device that facilitates communication between RF devices and other communication protocols, such as MQTT in this context. Operating at specific frequencies like 433MHz, 315MHz, 868MHz, and 915MHz, these gateways can receive signals from various RF devices, decode them, and then forward the decoded data to systems like Home Assistant, OpenHAB, or any other MQTT-based system.
 
-### Switching Active Receiver Module
+The primary advantage of using an RF gateway is its ability to bridge the gap between the world of RF devices, which might include sensors, remote controls, and other RF-based gadgets, and modern smart home systems or applications. This enables users to integrate a wide range of devices into their smart home setup, even if those devices were not originally designed for such integration.
 
-Switching of the active receiver module is available between the RF, RF2, RTL_433 and Pilight Gateway modules, allowing for changing of signal decoders without redeploying the openMQTTGateway package.  Sending a JSON message to the command topic of the desired receiver will change the active receiver module.
+In the context of the 433MHz MQTT gateway, the device not only decodes RF signals but also allows for seamless integration with MQTT systems. This means that signals from RF devices can be easily published to MQTT topics, and likewise, MQTT messages can be translated into RF signals for transmission. This two-way communication capability makes the gateway a powerful tool for expanding the capabilities of both RF devices and MQTT systems.
 
-To enable the RF Gateway module send a json message to the RF Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+OpenMQTTGateway leverages several libraries for RF communication:
+| Library  | Description | Device Support | Resource Requirements | Flexibility | Integration Capabilities |
+|-|-|-|-|-|-|
+| RTL_433  | Maintained and performant library supporting receiving 433Mhz but also other frequencies (does not support sending)| Wide range of devices | Moderate | Decodes various protocols | Can be integrated with systems supporting Home Assistant Auto Discovery|
+| RCSwitch | Arduino library for 433MHz module communication. | Basic devices | Lightweight | Basic encoding and decoding | Basic integration |
+| Pilight  | Open-source solution for device control and data retrieval. | Broad range of devices and protocols | Moderate | Offers raw and protocol-specific data handling  | Structured data |
+| RF2      | Library focused on KaKu devices and protocol. | Specific devices and protocols| Lightweight | Decoding and encoding capabilities  | Basic integration |
 
-Example:
-`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTto433" -m '{"active":true}'`
+::: tip INFO
+RTL_433 library can only receive data, RCSwitch, PiLight, RF2 can receive and transmit.
+:::
 
-To enable the PiLight Gateway module send a json message to the PiLight Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+## Common parameters accross modules
 
-Example:
-`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight" -m '{"active":true}'`
+### Change default frequency (SX127X and CC1101)
 
-To enable the RF2 Gateway module send a json message to the RF2 Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+The frequency can be can changed by sending an MQTT message or through the WebUI.  Parameter is `frequency` and valid values are 300-348 Mhz, 387-464Mhz and 779-928Mhz.  Actual frequency support will depend on your board
 
-Example:
-`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoRF2" -m '{"active":true}'`
+`home/OpenMQTTGateway/commands/MQTTtoRF/config {"frequency":315.026}`
 
-To enable the RTL_433 Gateway module send a json message to the RTL_433 Gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
+Note that with CC1101 this frequency will be used as the default sending frequency.
 
-Example:
-`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoRTL_433" -m '{"active":true}'`
+### Changing Active Receiver Modules
 
-### Status Messages
+Switching of the active transceiver (RTL_433 receiver only) module is available between the RF, RF2, and (RTL_433 or Pilight) gateway modules, allowing for changing of signal decoders without redeploying the OpenMQTTGateway package.  Sending a JSON message to the command topic will change the active transceiver module.
 
-The openMQTTGateway status message contains a key `actRec` which is the current active receiver module.
+To enable the RF gateway module send a json message to the RF gateway module command subject with the key being 'active', and any value.  The value at this time is ignored. 
 
 1 - PiLight
 2 - RF
 3 - RTL_433
 4 - RF2
+
+Example to receive from the RF gateway:
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoRF/config" -m '{"active":2}'`
+
+The active receiver can also be changed with the WebUI.
+
+The OpenMQTTGateway RFtoMQTT status message contains a key `active` which is the current active receiver module.
+
+## RTL_433 device decoders
+
+This feature is only available on a ESP32 based device with a supported transceiver connected due to the resource requirements of the rtl_433 device decoders.  At the present time only Pulse Position Modulation (OOK_PPM), Pulse Width Modulation (OOK_PWM) and  Pulse Manchester Zero Bit (OOK_PULSE_MANCHESTER_ZEROBIT) based decoders are available.
+
+### Supported hardware combinations
+
+- ESP32 based device with a CC1101 transceiver
+- Heltec WiFi LoRa 32 (V2.1) and LilyGo LoRa 32 V2.1
+- ESP32 DOIT DevKit V1 and Ai-Thinker R01 (SX1278)
+- ESP32 + SX1278/SX1276
+
+### Supported Decoders
+
+```
+Registering protocol [2] "Acurite 609TXC Temperature and Humidity Sensor"
+Registering protocol [3] "Acurite 592TXR Temp/Humidity, 5n1 Weather Station, 6045 Lightning, 3N1, Atlas"
+Registering protocol [4] "Acurite 986 Refrigerator / Freezer Thermometer"
+Registering protocol [5] "Acurite 606TX Temperature Sensor"
+Registering protocol [6] "Acurite 00275rm,00276rm Temp/Humidity with optional probe"
+Registering protocol [7] "Acurite 590TX Temperature with optional Humidity"
+Registering protocol [8] "Acurite Grill/Meat Thermometer 01185M"
+Registering protocol [9] "Akhan 100F14 remote keyless entry"
+Registering protocol [10] "AlectoV1 Weather Sensor (Alecto WS3500 WS4500 Ventus W155/W044 Oregon)"
+Registering protocol [11] "Ambient Weather TX-8300 Temperature/Humidity Sensor"
+Registering protocol [13] "Auriol AFT 77 B2 temperature sensor"
+Registering protocol [14] "Auriol AFW2A1 temperature/humidity sensor"
+Registering protocol [15] "Auriol AHFL temperature/humidity sensor"
+Registering protocol [16] "Auriol HG02832, HG05124A-DCF, Rubicson 48957 temperature/humidity sensor"
+Registering protocol [18] "Blyss DC5-UK-WH"
+Registering protocol [20] "Bresser Thermo-/Hygro-Sensor 3CH"
+Registering protocol [22] "Burnhard BBQ thermometer"
+Registering protocol [23] "Calibeur RF-104 Sensor"
+Registering protocol [24] "Cardin S466-TX2"
+Registering protocol [25] "Chuango Security Technology"
+Registering protocol [26] "Companion WTR001 Temperature Sensor"
+Registering protocol [29] "Ecowitt Wireless Outdoor Thermometer WH53/WH0280/WH0281A"
+Registering protocol [30] "Eurochron EFTH-800 temperature and humidity sensor"
+Registering protocol [34] "Esperanza EWS"
+Registering protocol [36] "Fine Offset Electronics, WH2, WH5, Telldus Temperature/Humidity/Rain Sensor"
+Registering protocol [37] "Fine Offset Electronics, WH0530 Temperature/Rain Sensor"
+Registering protocol [38] "Fine Offset WH1050 Weather Station"
+Registering protocol [39] "Fine Offset Electronics WH1080/WH3080 Weather Station"
+Registering protocol [41] "FT-004-B Temperature Sensor"
+Registering protocol [42] "Generic wireless motion sensor"
+Registering protocol [43] "Generic Remote SC226x EV1527"
+Registering protocol [44] "Generic temperature sensor 1"
+Registering protocol [45] "Govee Water Leak Dectector H5054, Door Contact Sensor B5023"
+Registering protocol [46] "Globaltronics QUIGG GT-TMBBQ-05"
+Registering protocol [47] "Globaltronics GT-WT-02 Sensor"
+Registering protocol [48] "Globaltronics GT-WT-03 Sensor"
+Registering protocol [49] "Microchip HCS200 KeeLoq Hopping Encoder based remotes"
+Registering protocol [50] "Honeywell ActivLink, Wireless Doorbell"
+Registering protocol [51] "HT680 Remote control"
+Registering protocol [52] "inFactory, nor-tec, FreeTec NC-3982-913 temperature humidity sensor"
+Registering protocol [54] "Interlogix GE UTC Security Devices"
+Registering protocol [56] "Kedsum Temperature & Humidity Sensor, Pearl NC-7415"
+Registering protocol [57] "Kerui PIR / Contact Sensor"
+Registering protocol [58] "LaCrosse TX Temperature / Humidity Sensor"
+Registering protocol [59] "LaCrosse TX141-Bv2, TX141TH-Bv2, TX141-Bv3, TX141W, TX145wsdth, (TFA, ORIA) sensor"
+Registering protocol [60] "LaCrosse/ELV/Conrad WS7000/WS2500 weather sensors"
+Registering protocol [61] "LaCrosse WS-2310 / WS-3600 Weather Station"
+Registering protocol [63] "Markisol, E-Motion, BOFU, Rollerhouse, BF-30x, BF-415 curtain remote"
+Registering protocol [64] "Maverick et73"
+Registering protocol [66] "Missil ML0757 weather station"
+Registering protocol [68] "Nexus, FreeTec NC-7345, NX-3980, Solight TE82S, TFA 30.3209 temperature/humidity sensor"
+Registering protocol [70] "Opus/Imagintronix XT300 Soil Moisture"
+Registering protocol [71] "Oregon Scientific Weather Sensor"
+Registering protocol [72] "Oregon Scientific SL109H Remote Thermal Hygro Sensor"
+Registering protocol [74] "Philips outdoor temperature sensor (type AJ3650)"
+Registering protocol [75] "Philips outdoor temperature sensor (type AJ7010)"
+Registering protocol [76] "Prologue, FreeTec NC-7104, NC-7159-675 temperature sensor"
+Registering protocol [77] "Quhwa"
+Registering protocol [79] "Rubicson Temperature Sensor"
+Registering protocol [80] "Rubicson 48659 Thermometer"
+Registering protocol [81] "Conrad S3318P, FreeTec NC-5849-913 temperature humidity sensor"
+Registering protocol [82] "Silvercrest Remote Control"
+Registering protocol [83] "Skylink HA-434TL motion sensor"
+Registering protocol [84] "Wireless Smoke and Heat Detector GS 558"
+Registering protocol [85] "Solight TE44/TE66, EMOS E0107T, NX-6876-917"
+Registering protocol [86] "Springfield Temperature and Soil Moisture"
+Registering protocol [87] "TFA Dostmann 30.3221.02 T/H Outdoor Sensor"
+Registering protocol [88] "TFA Drop Rain Gauge 30.3233.01"
+Registering protocol [89] "TFA pool temperature sensor"
+Registering protocol [90] "TFA-Twin-Plus-30.3049, Conrad KW9010, Ea2 BL999"
+Registering protocol [91] "Thermopro TP11 Thermometer"
+Registering protocol [92] "Thermopro TP08/TP12/TP20 thermometer"
+Registering protocol [94] "TS-FT002 Wireless Ultrasonic Tank Liquid Level Meter With Temperature Sensor"
+Registering protocol [95] "Visonic powercode"
+Registering protocol [96] "Waveman Switch Transmitter"
+Registering protocol [97] "WG-PB12V1 Temperature Sensor"
+Registering protocol [98] "WS2032 weather station"
+Registering protocol [99] "Hyundai WS SENZOR Remote Temperature Sensor"
+Registering protocol [100] "WT0124 Pool Thermometer"
+Registering protocol [101] "X10 RF"
+Registering protocol [102] "X10 Security"
+```
+
+### Change Signal RSSI Threshold Delta
+
+Delta applied to RSSI floor noise level to determine start and end of signal, defaults to 9db.
+
+`home/OpenMQTTGateway/commands/MQTTtoRF/config {"rssithreshold": 9}`
+
+### Retrieve current status of receiver
+
+`home/OpenMQTTGateway/commands/MQTTtoRF/config {"status":1}`
+
+```
+{"model":"status",
+"protocol":"debug",
+"debug":0,                  - rtl_433 verbose setting
+"duration":11799327,        - duration of current signal
+"Gap length":-943575,       - duration of gap between current signal
+"rssi":-38,                 - most recent received signal strength
+"train":1,                  - signal processing train #
+"messageCount":3,           - total number of signals received
+"totalSignals":9,           - RegOokFix signal quality count ( of 10 )
+"ignoredSignals":0,         - RegOokFix signal quality ignored signals
+"unparsedSignals":3,        - RegOokFix signal quality unparseable signals
+"_enabledReceiver":1,       - which receiver is enabled
+"receiveMode":0,            - is the receiver currently receiving a signal
+"currentRssi":-89,          - current rssi level
+"rssiThreshold":-82,        - minimum rssi level to start signal processing
+"pulses":0,                 - how many pulses have been received in the current signal
+"StackHighWaterMark":5528,  - ESP32 Stack
+"freeMem":112880}           - ESP32 memory available
+```
 
 ## RCSwitch based gateway
 
@@ -64,13 +207,13 @@ This command will send by RF the code 1315156 and use the default parameters (pr
 
 Arduino IDE serial data received when publishing data by MQTT
 
-![](../img/OpenMQTTGateway_serial1.jpg)
+![Serial data](../img/OpenMQTTGateway_serial1.jpg)
 
 We see that the Arduino receive the value 1315156 on the MQTT subject "MQTTto433" and send the data by RF
 
 Arduino IDE serial data received when receiving data by 433Mhz
 
-![](../img/OpenMQTTGateway_serial2.jpg)
+![Serial data 2](../img/OpenMQTTGateway_serial2.jpg)
 
 ### Send data by MQTT with advanced RF parameters
 
@@ -101,15 +244,15 @@ Example:
 
 Default transmit frequency of the CC1101 module is 433.92 Mhz, and this can be can changed by including the frequency in the transmit message.  Parameter is `mhz` and valid values are 300-348 Mhz, 387-464Mhz and 779-928Mhz.  Actual frequency support will depend on your CC1101 board.
 
-`home/OpenMQTTGateway/commands/MQTTto433 {"value":1150,"protocol":6,"length":12,"delay":450,"repeat":8,"mhz":303.732}`
+`home/OpenMQTTGateway/commands/MQTTto433 {"value":1150,"protocol":6,"length":12,"delay":450,"repeat":8,"frequency":303.732}`
 
-Default receive frequency of the CC1101 module is 433.92 Mhz, and this can be can changed by sending a message with the frequency.  Parameter is `mhz` and valid values are 300-348 Mhz, 387-464Mhz and 779-928Mhz.  Actual frequency support will depend on your CC1101 board
+Default receive frequency of the CC1101 module is 433.92 Mhz, and this can be can changed by sending a message with the frequency.  Parameter is `frequency` and valid values are 300-348 Mhz, 387-464Mhz and 779-928Mhz.  Actual frequency support will depend on your CC1101 board
 
-`home/OpenMQTTGateway/commands/MQTTto433 {"mhz":315.026}`
+`home/OpenMQTTGateway/commands/MQTTtoRF/config {"frequency":433.92}`
 
 Messages received will include the frequency, and when transmitting on a different frequency the module return to the receive frequency afterwards.  ie transmit messages on 303.732 Mhz then receive messages on 433.92 Mhz 
 
-`{"value":4534142,"protocol":6,"length":26,"delay":356,"mhz":315.026}`
+`{"value":4534142,"protocol":6,"length":26,"delay":356,"frequency":315.026}`
 
 You can adjust the tx-power in db for a transmission. Parameter is `cc1101_pa` and valid values in decibel are (-30  -20  -15  -10  -6    0    5    7    10   11   12) Default is max!
 That can be done to reduce range and therefore disturbances with other nearby devices.
@@ -128,7 +271,25 @@ Subscribe to all the messages with mosquitto or open your MQTT client software:
 
 Generate your RF signals by pressing a remote button or other and you will see :
 
-![](../img/OpenMQTTGateway_Pilight_Digoo-DG-R8S.png)
+![Digoo DG R8S data](../img/OpenMQTTGateway_Pilight_Digoo-DG-R8S.png)
+
+#### Enabling RAW packet return support
+First, you need to compile a binary with `Pilight_rawEnabled true` uncommented in config_RF.h.
+
+Once the device is online, you can turn on the RAW packet return support with the following MQTT command:
+
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols" -m '{"rawEnabled":true}'`
+
+The returned JSON looks like this:
+`Client (null) received PUBLISH (d0, q0, r0, m0, 'home/OpenMQTTGateway/PilighttoMQTT', ... (176 bytes))
+{"format":"RAW","rawlen":106,"pulsesString":"c:0102010102020202020101010101010102020201020102020202020201010101010101010101010102010102010201020201010203;p:521,944,1924,3845@"}`
+
+The pulseString format is Pilight's native. For those who are not familiar with it:
+c:* are the indexes for the p:* array, which are the different pulse length. (e.g. pulse[0] = 521ms, pulse[1]=944ms..., so c[0], which is a '0' = 521ms pulse, c[1], which is a '1' =944ms pulse etc)
+
+After gathering all the packets you need, simply turn off the RAW packet support via MQTT:
+
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols" -m '{"rawEnabled":false}'`
 
 ### Limit Protocols
 It is possible to limit the protocols that Pilight will respond to, this can help reduce noise from unwanted devices and in some cases disable conflicting protocols.
@@ -146,7 +307,7 @@ eg: `mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols" -m
 
 #### Reset protocols
 To reset and listen to all protocols -
-`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols -m '{"reset": true}`'
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight/protocols -m '{"reset": true}'`
 
 #### Enabled protocols
 To list the enabled protocols on the Serial - 
@@ -163,6 +324,9 @@ To list the enabled protocols on the Serial -
 `mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight" -m '{"message":"{\"systemcode\":12,\"unitcode\":22,\"off\":1}","protocol":"elro_400_switch"}'`
 
 These commands will transmit by RF the signals to actuate an elro_400 switch.
+
+With a different frequency (CC1101 only):
+`mosquitto_pub -t "home/OpenMQTTGateway/commands/MQTTtoPilight" -m '{"message":"{\"systemcode\":12,\"unitcode\":22,\"off\":1}","protocol":"elro_400_switch","frequency":315.026}'`
 
 #### Using a raw signal
 You can transmit raw signal data by using the "raw" protocol. This uses the Pilight pulse train string format. One such example string, representing a transmission for Nexus protocol weather stations, looks like this: `c:03020202010102020102010101010101010202020201020102020202020101010201010202;p:500,1000,2000,4000;r:12@`. This string represents pulses and gaps directly.
@@ -250,134 +414,3 @@ Once you get the infos publish the parameters with MQTT like that for off:
 for on:
 
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoRF2 -m "{"unit":0,"groupBit":0,"period":273,"address":8233228,"switchType":1}"`
-
-## rtl_433 device decoders
-
-This feature is only available on a ESP32 based device with a supported transceiver connected due to the resource requirements of the rtl_433 device decoders.  At the present time only Pulse Position Modulation (OOK_PPM) and Pulse Width Modulation (OOK_PWM) based decoders are available.
-
-### Supported hardware combinations
-
-- ESP32 based device with a CC1101 transceiver
-- Heltec WiFi LoRa 32 (V2.1) and LilyGo Lora 32 V2.1
-
-### Supported Decoders
-
-```
-Registering protocol [2] "Acurite 609TXC Temperature and Humidity Sensor"
-Registering protocol [3] "Acurite 592TXR Temp/Humidity, 5n1 Weather Station, 6045 Lightning, 3N1, Atlas"
-Registering protocol [4] "Acurite 986 Refrigerator / Freezer Thermometer"
-Registering protocol [5] "Acurite 606TX Temperature Sensor"
-Registering protocol [6] "Acurite 00275rm,00276rm Temp/Humidity with optional probe"
-Registering protocol [7] "Acurite 590TX Temperature with optional Humidity"
-Registering protocol [8] "Acurite Grill/Meat Thermometer 01185M"
-Registering protocol [9] "Akhan 100F14 remote keyless entry"
-Registering protocol [10] "AlectoV1 Weather Sensor (Alecto WS3500 WS4500 Ventus W155/W044 Oregon)"
-Registering protocol [11] "Ambient Weather TX-8300 Temperature/Humidity Sensor"
-Registering protocol [13] "Auriol AFT 77 B2 temperature sensor"
-Registering protocol [14] "Auriol AFW2A1 temperature/humidity sensor"
-Registering protocol [15] "Auriol AHFL temperature/humidity sensor"
-Registering protocol [16] "Auriol HG02832, HG05124A-DCF, Rubicson 48957 temperature/humidity sensor"
-Registering protocol [18] "Blyss DC5-UK-WH"
-Registering protocol [20] "Bresser Thermo-/Hygro-Sensor 3CH"
-Registering protocol [22] "Burnhard BBQ thermometer"
-Registering protocol [23] "Calibeur RF-104 Sensor"
-Registering protocol [24] "Cardin S466-TX2"
-Registering protocol [25] "Chuango Security Technology"
-Registering protocol [26] "Companion WTR001 Temperature Sensor"
-Registering protocol [29] "Ecowitt Wireless Outdoor Thermometer WH53/WH0280/WH0281A"
-Registering protocol [30] "Eurochron EFTH-800 temperature and humidity sensor"
-Registering protocol [34] "Esperanza EWS"
-Registering protocol [36] "Fine Offset Electronics, WH2, WH5, Telldus Temperature/Humidity/Rain Sensor"
-Registering protocol [37] "Fine Offset Electronics, WH0530 Temperature/Rain Sensor"
-Registering protocol [38] "Fine Offset WH1050 Weather Station"
-Registering protocol [39] "Fine Offset Electronics WH1080/WH3080 Weather Station"
-Registering protocol [41] "FT-004-B Temperature Sensor"
-Registering protocol [42] "Generic wireless motion sensor"
-Registering protocol [43] "Generic Remote SC226x EV1527"
-Registering protocol [44] "Generic temperature sensor 1"
-Registering protocol [45] "Govee Water Leak Dectector H5054, Door Contact Sensor B5023"
-Registering protocol [46] "Globaltronics QUIGG GT-TMBBQ-05"
-Registering protocol [47] "Globaltronics GT-WT-02 Sensor"
-Registering protocol [48] "Globaltronics GT-WT-03 Sensor"
-Registering protocol [49] "Microchip HCS200 KeeLoq Hopping Encoder based remotes"
-Registering protocol [50] "Honeywell ActivLink, Wireless Doorbell"
-Registering protocol [51] "HT680 Remote control"
-Registering protocol [52] "inFactory, nor-tec, FreeTec NC-3982-913 temperature humidity sensor"
-Registering protocol [54] "Interlogix GE UTC Security Devices"
-Registering protocol [56] "Kedsum Temperature & Humidity Sensor, Pearl NC-7415"
-Registering protocol [57] "Kerui PIR / Contact Sensor"
-Registering protocol [58] "LaCrosse TX Temperature / Humidity Sensor"
-Registering protocol [59] "LaCrosse TX141-Bv2, TX141TH-Bv2, TX141-Bv3, TX141W, TX145wsdth sensor"
-Registering protocol [60] "LaCrosse/ELV/Conrad WS7000/WS2500 weather sensors"
-Registering protocol [61] "LaCrosse WS-2310 / WS-3600 Weather Station"
-Registering protocol [63] "Markisol, E-Motion, BOFU, Rollerhouse, BF-30x, BF-415 curtain remote"
-Registering protocol [64] "Maverick et73"
-Registering protocol [66] "Missil ML0757 weather station"
-Registering protocol [68] "Nexus, FreeTec NC-7345, NX-3980, Solight TE82S, TFA 30.3209 temperature/humidity sensor"
-Registering protocol [70] "Opus/Imagintronix XT300 Soil Moisture"
-Registering protocol [71] "Oregon Scientific SL109H Remote Thermal Hygro Sensor"
-Registering protocol [73] "Philips outdoor temperature sensor (type AJ3650)"
-Registering protocol [74] "Philips outdoor temperature sensor (type AJ7010)"
-Registering protocol [75] "Prologue, FreeTec NC-7104, NC-7159-675 temperature sensor"
-Registering protocol [76] "Quhwa"
-Registering protocol [78] "Rubicson Temperature Sensor"
-Registering protocol [79] "Rubicson 48659 Thermometer"
-Registering protocol [80] "Conrad S3318P, FreeTec NC-5849-913 temperature humidity sensor"
-Registering protocol [81] "Silvercrest Remote Control"
-Registering protocol [82] "Skylink HA-434TL motion sensor"
-Registering protocol [83] "Wireless Smoke and Heat Detector GS 558"
-Registering protocol [84] "Solight TE44/TE66, EMOS E0107T, NX-6876-917"
-Registering protocol [85] "Springfield Temperature and Soil Moisture"
-Registering protocol [86] "TFA Dostmann 30.3221.02 T/H Outdoor Sensor"
-Registering protocol [87] "TFA Drop Rain Gauge 30.3233.01"
-Registering protocol [88] "TFA pool temperature sensor"
-Registering protocol [89] "TFA-Twin-Plus-30.3049, Conrad KW9010, Ea2 BL999"
-Registering protocol [90] "Thermopro TP11 Thermometer"
-Registering protocol [91] "Thermopro TP08/TP12/TP20 thermometer"
-Registering protocol [93] "TS-FT002 Wireless Ultrasonic Tank Liquid Level Meter With Temperature Sensor"
-Registering protocol [94] "Visonic powercode"
-Registering protocol [95] "Waveman Switch Transmitter"
-Registering protocol [96] "WG-PB12V1 Temperature Sensor"
-Registering protocol [97] "WS2032 weather station"
-Registering protocol [98] "Hyundai WS SENZOR Remote Temperature Sensor"
-Registering protocol [99] "WT0124 Pool Thermometer"
-Registering protocol [100] "X10 RF"
-Registering protocol [101] "X10 Security"
-```
-
-### Change receive frequency
-
-Default receive frequency of the CC1101 module is 433.92 Mhz, and this can be can changed by sending a message with the frequency.  Parameter is `mhz` and valid values are 300-348 Mhz, 387-464Mhz and 779-928Mhz.  Actual frequency support will depend on your CC1101 board
-
-`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"mhz":315.026}`
-
-### Change Signal RSSI Threshold Delta
-
-Delta applied to RSSI floor noise level to determine start and end of signal, defaults to 9db.
-
-`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"rssi": 9}`
-
-### Retrieve current status of receiver
-
-`home/OpenMQTTGateway/commands/MQTTtoRTL_433 {"status":1}`
-
-```
-{"model":"status",
-"protocol":"debug",
-"debug":0,                  - rtl_433 verbose setting
-"duration":11799327,        - duration of current signal
-"Gap length":-943575,       - duration of gap between current signal
-"rssi":-38,                 - most recent received signal strength
-"train":1,                  - signal processing train #
-"messageCount":3,           - total number of signals received
-"totalSignals":9,           - RegOokFix signal quality count ( of 10 )
-"ignoredSignals":0,         - RegOokFix signal quality ignored signals
-"unparsedSignals":3,        - RegOokFix signal quality unparseable signals
-"_enabledReceiver":1,       - which receiver is enabled
-"receiveMode":0,            - is the receiver currently receiving a signal
-"currentRssi":-89,          - current rssi level
-"rssiThreshold":-82,        - minimum rssi level to start signal processing
-"pulses":0,                 - how many pulses have been received in the current signal
-"StackHighWaterMark":5528,  - ESP32 Stack
-"freeMem":112880}           - ESP32 memory available
-```

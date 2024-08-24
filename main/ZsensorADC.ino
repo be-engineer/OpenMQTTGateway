@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
     Analog GPIO reading Addon
@@ -34,6 +34,8 @@
 ADC_MODE(ADC_TOUT);
 #  endif
 
+static int persistedadc = -1024; // so that the first reading will always be published
+
 //Time used to wait for an interval before resending adc value
 unsigned long timeadc = 0;
 unsigned long timeadcpub = 0;
@@ -42,13 +44,12 @@ void setupADC() {
 }
 
 void MeasureADC() {
-  if (millis() > (timeadc + TimeBetweenReadingADC)) { //retrieving value of temperature and humidity of the box from DHT every xUL
+  if (millis() - timeadc > TimeBetweenReadingADC) { //retrieving value of temperature and humidity of the box from DHT every xUL
 #  if defined(ESP8266)
     yield();
     analogRead(ADC_GPIO); //the reliability of the readings can be significantly improved by discarding an initial reading and then averaging the results
 #  endif
     timeadc = millis();
-    static int persistedadc;
     int val = analogRead(ADC_GPIO);
     int sum_val = val;
     if (NumberOfReadingsADC > 1) { // add extra measurement for accuracy
@@ -60,11 +61,11 @@ void MeasureADC() {
     if (isnan(val)) {
       Log.error(F("Failed to read from ADC !" CR));
     } else {
-      if (val >= persistedadc + ThresholdReadingADC || val <= persistedadc - ThresholdReadingADC || (MinTimeInSecBetweenPublishingADC > 0 && millis() > (timeadcpub + (MinTimeInSecBetweenPublishingADC * 1000UL)))) {
+      if (val >= persistedadc + ThresholdReadingADC || val <= persistedadc - ThresholdReadingADC || (MinTimeInSecBetweenPublishingADC > 0 && millis() - timeadcpub > (MinTimeInSecBetweenPublishingADC * 1000UL))) {
         timeadcpub = millis();
         Log.trace(F("Creating ADC buffer" CR));
-        StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-        JsonObject ADCdata = jsonBuffer.to<JsonObject>();
+        StaticJsonDocument<JSON_MSG_BUFFER> ADCdataBuffer;
+        JsonObject ADCdata = ADCdataBuffer.to<JsonObject>();
         ADCdata["adc"] = (int)val;
         if (NumberOfReadingsADC > 1) {
           ADCdata["adc_reads"] = NumberOfReadingsADC;
@@ -92,7 +93,8 @@ void MeasureADC() {
         ADCdata["adc_sum"] = (int)sum_val;
         ADCdata["mvolt_scaled"] = (int)voltage; // real scaled/calibrated value in mV
 #  endif
-        pub(ADCTOPIC, ADCdata);
+        ADCdata["origin"] = ADCTOPIC;
+        handleJsonEnqueue(ADCdata);
         persistedadc = val;
       }
     }

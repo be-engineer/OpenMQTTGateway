@@ -1,7 +1,7 @@
 /*
   OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
 
    This is the Climate Addon:
@@ -13,12 +13,12 @@
    Connection Schemata:
    --------------------
 
-   BME280/BMP280 ------> Arduino Uno ----------> ESP8266
+   BME280/BMP280 ------> ESP8266
    =====================================================
-   Vcc ----------------> 5V/3.3V     ----------> 5V/3.3V    (5V or 3.3V depends on the BME280/BMP280 board variant)
-   GND ----------------> GND         ----------> GND
-   SCL ----------------> Pin A5      ----------> D1
-   SDA ----------------> Pin A4      ----------> D2
+   Vcc ----------------> 5V/3.3V    (5V or 3.3V depends on the BME280/BMP280 board variant)
+   GND ----------------> GND
+   SCL ----------------> D1
+   SDA ----------------> D2
 
     Copyright: (c) Hans-Juergen Dinges
 
@@ -49,12 +49,8 @@
 BME280 mySensor;
 
 void setupZsensorBME280() {
-#  if defined(ESP8266) || defined(ESP32)
   // Allow custom pins on ESP Platforms
   Wire.begin(BME280_PIN_SDA, BME280_PIN_SCL);
-#  else
-  Wire.begin();
-#  endif
 
   mySensor.settings.commInterface = I2C_MODE;
   mySensor.settings.I2CAddress = BME280_i2c_addr;
@@ -147,8 +143,8 @@ void MeasureTempHumAndPressure() {
       Log.error(F("Failed to read from BME280/BMP280!" CR));
     } else {
       Log.trace(F("Creating BME280/BMP280 buffer" CR));
-      StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-      JsonObject BME280data = jsonBuffer.to<JsonObject>();
+      StaticJsonDocument<JSON_MSG_BUFFER> BME280dataBuffer;
+      JsonObject BME280data = BME280dataBuffer.to<JsonObject>();
       // Generate Temperature in degrees C
       if (BmeTempC != persisted_bme_tempc || bme280_always) {
         BME280data["tempc"] = (float)BmeTempC;
@@ -191,10 +187,8 @@ void MeasureTempHumAndPressure() {
       } else {
         Log.trace(F("Same Altitude Feet don't send it" CR));
       }
-      if (BME280data.size() > 0) {
-        pub(BMETOPIC, BME280data);
-        pubOled(BMETOPIC, BME280data);
-      }
+      BME280data["origin"] = BMETOPIC;
+      handleJsonEnqueue(BME280data);
     }
 
     persisted_bme_tempc = BmeTempC;

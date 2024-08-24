@@ -1,7 +1,7 @@
 /*
   OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
 
     Supported boards with displays
@@ -38,38 +38,45 @@
 #  include "ArduinoLog.h"
 #  include "User_config.h"
 #  include "config_SSD1306.h"
+#  ifdef DISPLAY_BLANKING
+#    include "driver/touch_sensor.h"
+#  endif
 
 SemaphoreHandle_t semaphoreOLEDOperation;
-QueueHandle_t displayQueue;
-boolean logToLCDDisplay = LOG_TO_LCD;
-boolean jsonDisplay = JSON_TO_LCD;
-boolean displayMetric = DISPLAY_METRIC;
+
+boolean logToOLEDDisplay = LOG_TO_OLED;
+boolean jsonDisplay = JSON_TO_OLED;
+boolean displayFlip = DISPLAY_FLIP;
+boolean displayState = DISPLAY_STATE;
+boolean idlelogo = DISPLAY_IDLE_LOGO;
+uint8_t displayBrightness = DISPLAY_BRIGHTNESS;
 
 /*
 Toogle log display
 */
-void logToLCD(bool display) {
-  logToLCDDisplay = display;
-  display ? Log.begin(LOG_LEVEL_LCD, &Oled) : Log.begin(LOG_LEVEL, &Serial); // Log on LCD following LOG_LEVEL_LCD
+void logToOLED(bool display) {
+  logToOLEDDisplay = display;
+  display ? Log.begin(LOG_LEVEL_OLED, &Oled) : Log.begin(LOG_LEVEL, &Serial); // Log on OLED following LOG_LEVEL_OLED
 }
 
 /*
 module setup, for use in Arduino setup
 */
 void setupSSD1306() {
+  SSD1306Config_init();
+  SSD1306Config_load();
   Log.trace(F("Setup SSD1306 Display" CR));
   Log.trace(F("ZdisplaySSD1306 command topic: %s" CR), subjectMQTTtoSSD1306set);
-  Log.trace(F("ZdisplaySSD1306 log-lcd: %T" CR), logToLCDDisplay);
-  Log.trace(F("ZdisplaySSD1306 json-lcd: %T" CR), jsonDisplay);
+  Log.trace(F("ZdisplaySSD1306 log-oled: %T" CR), logToOLEDDisplay);
+  Log.trace(F("ZdisplaySSD1306 json-oled: %T" CR), jsonDisplay);
   Log.trace(F("ZdisplaySSD1306 DISPLAY_PAGE_INTERVAL: %d" CR), DISPLAY_PAGE_INTERVAL);
-  Log.trace(F("ZdisplaySSD1306 DISPLAY_IDLE_LOGO: %T" CR), DISPLAY_IDLE_LOGO);
-  Log.trace(F("ZdisplaySSD1306 DISPLAY_METRIC: %T" CR), displayMetric);
-
+  Log.trace(F("ZdisplaySSD1306 DISPLAY_IDLE_LOGO: %T" CR), idlelogo);
+  Log.trace(F("ZdisplaySSD1306 DISPLAY_FLIP: %T" CR), displayFlip);
   Oled.begin();
   Log.notice(F("Setup SSD1306 Display end" CR));
 
-#  if LOG_TO_LCD
-  Log.begin(LOG_LEVEL_LCD, &Oled); // Log on LCD following LOG_LEVEL_LCD
+#  if LOG_TO_OLED
+  Log.begin(LOG_LEVEL_OLED, &Oled); // Log on OLED following LOG_LEVEL_OLED
   jsonDisplay = false;
 #  else
   jsonDisplay = true;
@@ -78,6 +85,17 @@ void setupSSD1306() {
 
 boolean logoDisplayed = false;
 unsigned long nextDisplayPage = uptime() + DISPLAY_PAGE_INTERVAL;
+
+#  ifdef DISPLAY_BLANKING
+unsigned long blankingStart = uptime() + DISPLAY_BLANKING_START;
+
+touch_value_t touchReadings[TOUCH_READINGS] = {0};
+touch_value_t touchCurrentReading = 0;
+int touchIndex = 0;
+int touchTotal = 0;
+int touchAverage = 0;
+int touchThreshold = 0;
+#  endif
 
 /*
 module loop, for use in Arduino loop
@@ -88,261 +106,182 @@ void loopSSD1306() {
 
   long enough since the last message and display not being used and a queue message waiting
   */
-  if (jsonDisplay) {
-    if (uptime() >= nextDisplayPage && uxSemaphoreGetCount(semaphoreOLEDOperation) && uxQueueMessagesWaiting(displayQueue)) {
-      displayQueueMessage* message = nullptr;
-      xQueueReceive(displayQueue, &message, portMAX_DELAY);
-      if (!Oled.displayPage(message)) {
-        Log.warning(F("[ssd1306] displayPage failed: %s" CR), message->title);
+
+#  ifdef DISPLAY_BLANKING
+  // Log.trace(F("touchAverage %d, touchCurrentReading %d, touchThreshold %d" CR), touchAverage, touchCurrentReading, touchThreshold);
+  touchTotal = touchTotal - touchReadings[touchIndex];
+  touchCurrentReading = touchRead(DISPLAY_BLANKING_TOUCH_GPIO);
+  touchReadings[touchIndex] = touchCurrentReading;
+  touchTotal = touchTotal + touchReadings[touchIndex];
+  touchIndex = (touchIndex + 1) % TOUCH_READINGS;
+  touchAverage = touchTotal / TOUCH_READINGS;
+  touchThreshold = touchAverage * TOUCH_THRESHOLD;
+
+  if ((touchCurrentReading > touchAverage + touchThreshold || touchCurrentReading < touchAverage - touchThreshold) && displayState) {
+    blankingStart = uptime() + DISPLAY_BLANKING_START;
+    Oled.display->displayOn();
+  }
+  if (uptime() > blankingStart && displayState) {
+    Oled.display->displayOff();
+  }
+#  endif
+
+  if (jsonDisplay && displayState) {
+    if (uptime() >= nextDisplayPage && uxSemaphoreGetCount(semaphoreOLEDOperation) && currentWebUIMessage && newSSD1306Message) {
+      if (!Oled.displayPage(currentWebUIMessage)) {
+        Log.warning(F("[ssd1306] displayPage failed: %s" CR), currentWebUIMessage->title);
       }
-      free(message);
       nextDisplayPage = uptime() + DISPLAY_PAGE_INTERVAL;
+      logoDisplayed = false;
+      newSSD1306Message = false;
     }
   }
   /*
   Display logo if it has been more than DISPLAY_PAGE_INTERVAL
   */
-#  if DISPLAY_IDLE_LOGO
-  if (uptime() > nextDisplayPage + 1 && !logoDisplayed) {
-    Oled.fillScreen(WHITE);
-    Oled.drawLogo((int)OLED_WIDTH * 0.24, (int)(OLED_WIDTH / 2) - OLED_WIDTH * 0.2, (int)(OLED_HEIGHT / 2) + OLED_HEIGHT * 0.2, true, true, true, true, true, true); // Name
+  if (uptime() > nextDisplayPage + 1 && !logoDisplayed && idlelogo && displayState) {
+    Oled.display->normalDisplay();
+    Oled.fillScreen(BLACK);
+    Oled.drawLogo(rand() % 13 - 5, rand() % 32 - 13);
     logoDisplayed = true;
-  } else {
-    logoDisplayed = false;
   }
-#  endif
 }
 
 /*
 Handler for mqtt commands sent to the module
-- log-lcd: boolean
+- log-oled: boolean
   Enable / Disable display of log messages on display
 */
 void MQTTtoSSD1306(char* topicOri, JsonObject& SSD1306data) { // json object decoding
   bool success = false;
   if (cmpToMainTopic(topicOri, subjectMQTTtoSSD1306set)) {
     Log.trace(F("MQTTtoSSD1306 json set" CR));
-    // Log display set between SSD1306 lcd (true) and serial monitor (false)
-    if (SSD1306data.containsKey("log-lcd")) {
-      logToLCDDisplay = SSD1306data["log-lcd"];
-      Log.notice(F("Set lcd log: %T" CR), logToLCDDisplay);
-      logToLCD(logToLCDDisplay);
-      if (logToLCDDisplay) {
+    // properties
+    if (SSD1306data.containsKey("onstate")) {
+      displayState = SSD1306data["onstate"].as<bool>();
+      Log.notice(F("Set display state: %T" CR), displayState);
+      success = true;
+    }
+    if (SSD1306data.containsKey("brightness")) {
+      displayBrightness = SSD1306data["brightness"].as<int>();
+      Log.notice(F("Set brightness: %d" CR), displayBrightness);
+      success = true;
+    }
+    if (SSD1306data.containsKey("log-oled")) {
+      logToOLEDDisplay = SSD1306data["log-oled"].as<bool>();
+      Log.notice(F("Set OLED log: %T" CR), logToOLEDDisplay);
+      logToOLED(logToOLEDDisplay);
+      if (logToOLEDDisplay) {
         jsonDisplay = false;
       }
       success = true;
-    } else if (SSD1306data.containsKey("json-lcd")) {
-      jsonDisplay = SSD1306data["json-lcd"];
+    } else if (SSD1306data.containsKey("json-oled")) {
+      jsonDisplay = SSD1306data["json-oled"].as<bool>();
       if (jsonDisplay) {
-        logToLCDDisplay = false;
-        logToLCD(logToLCDDisplay);
+        logToOLEDDisplay = false;
+        logToOLED(logToOLEDDisplay);
       }
-      Log.notice(F("Set json-lcd: %T" CR), jsonDisplay);
-      success = true;
-    } else if (SSD1306data.containsKey("display-metric")) {
-      displayMetric = SSD1306data["display-metric"];
-      Log.notice(F("Set display-metric: %T" CR), jsonDisplay);
+      Log.notice(F("Set json-oled: %T" CR), jsonDisplay);
       success = true;
     }
+    if (SSD1306data.containsKey("idlelogo")) {
+      idlelogo = SSD1306data["idlelogo"].as<bool>();
+      success = true;
+    }
+    if (SSD1306data.containsKey("display-flip")) {
+      displayFlip = SSD1306data["display-flip"].as<bool>();
+      Log.notice(F("Set display-flip: %T" CR), displayFlip);
+      success = true;
+    }
+    // save, load, init, erase
+    if (SSD1306data.containsKey("save") && SSD1306data["save"]) {
+      SSD1306Config_save();
+      success = true;
+    } else if (SSD1306data.containsKey("load") && SSD1306data["load"]) {
+      success = SSD1306Config_load();
+      if (success) {
+        Log.notice(F("SSD1306 config loaded" CR));
+      }
+    } else if (SSD1306data.containsKey("init") && SSD1306data["init"]) {
+      SSD1306Config_init();
+      success = true;
+      if (success) {
+        Log.notice(F("SSD1306 config initialised" CR));
+      }
+    } else if (SSD1306data.containsKey("erase") && SSD1306data["erase"]) {
+      // Erase config from NVS (non-volatile storage)
+      preferences.begin(Gateway_Short_Name, false);
+      if (preferences.isKey("SSD1306Config")) {
+        success = preferences.remove("SSD1306Config");
+      }
+      preferences.end();
+      if (success) {
+        Log.notice(F("SSD1306 config erased" CR));
+      }
+    }
     if (success) {
-      pub(subjectSSD1306toMQTTset, SSD1306data);
+      stateSSD1306Display();
     } else {
-      pub(subjectSSD1306toMQTTset, "{\"Status\": \"Error\"}"); // Fail feedback
-      Log.error(F("MQTTtoSSD1306 Fail json" CR), SSD1306data);
+      Log.error(F("[ SSD1306 ] MQTTtoSSD1306 Fail json" CR), SSD1306data);
     }
   }
 }
 
-/*
-Workaround for c not having a string based switch/case function
-*/
-constexpr unsigned int hash(const char* s, int off = 0) { // workaround for switching on a string https://stackoverflow.com/a/46711735/18643696
-  return !s[off] ? 5381 : (hash(s, off + 1) * 33) ^ s[off];
+void SSD1306Config_save() {
+  StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
+  JsonObject jo = jsonBuffer.to<JsonObject>();
+  jo["onstate"] = displayState;
+  jo["brightness"] = displayBrightness;
+  jo["log-oled"] = logToOLEDDisplay;
+  jo["json-oled"] = jsonDisplay;
+  jo["idlelogo"] = idlelogo;
+  jo["display-flip"] = displayFlip;
+  // Save config into NVS (non-volatile storage)
+  String conf = "";
+  serializeJson(jsonBuffer, conf);
+  preferences.begin(Gateway_Short_Name, false);
+  int result = preferences.putString("SSD1306Config", conf);
+  preferences.end();
+  Log.notice(F("SSD1306 Config_save: %s, result: %d" CR), conf.c_str(), result);
 }
 
-/*
-Parse json message from module into a format for displaying on screen, and queue for display
-*/
-void ssd1306PubPrint(const char* topicori, JsonObject& data) {
-  if (jsonDisplay) {
-    displayQueueMessage* message = (displayQueueMessage*)malloc(sizeof(displayQueueMessage));
+void SSD1306Config_init() {
+  displayState = DISPLAY_STATE;
+  displayBrightness = DISPLAY_BRIGHTNESS;
+  logToOLEDDisplay = LOG_TO_OLED;
+  jsonDisplay = JSON_TO_OLED;
+  idlelogo = DISPLAY_IDLE_LOGO;
+  displayFlip = DISPLAY_FLIP;
+  Log.notice(F("SSD1306 config initialised" CR));
+}
 
-    char* topic = strdup(topicori);
-    strlcpy(message->title, strtok(topic, "/"), OLED_TEXT_WIDTH);
-    free(topic);
-
-    switch (hash(message->title)) {
-      case hash("SYStoMQTT"): {
-        // {"uptime":456356,"version":"lilygo-rtl_433-test-A-v1.1.1-25-g574177d[lily-cloud]","freemem":125488,"mqttport":"1883","mqttsecure":false,"freestack":3752,"rssi":-36,"SSID":"The_Beach","BSSID":"64:A5:C3:69:C3:38","ip":"192.168.1.239","mac":"4C:75:25:A8:D5:D8","actRec":3,"mhz":433.92,"RTLRssiThresh":-98,"RTLRssi":-108,"RTLAVGRssi":-107,"RTLCnt":121707,"RTLOOKThresh":90,"modules":["LILYGO_OLED","CLOUD","rtl_433"]}
-
-        // Line 1
-
-        strlcpy(message->line1, data["version"], OLED_TEXT_WIDTH);
-
-        // Line 2
-
-        String uptime = data["uptime"];
-        String line2 = "uptime: " + uptime;
-        line2.toCharArray(message->line2, OLED_TEXT_WIDTH);
-
-        // Line 3
-
-        String freemem = data["freemem"];
-        String line3 = "freemem: " + freemem;
-        line3.toCharArray(message->line3, OLED_TEXT_WIDTH);
-
-        // Line 4
-
-        String ip = data["ip"];
-        String line4 = "ip: " + ip;
-        line4.toCharArray(message->line4, OLED_TEXT_WIDTH);
-
-        // Queue completed message
-
-        if (xQueueSend(displayQueue, (void*)&message, 0) != pdTRUE) {
-          Log.error(F("ERROR: displayQueue full, discarding signal %s" CR), message->title);
-        } else {
-          // Log.notice(F("Queued %s" CR), message->title);
-        }
-        break;
-      }
-
-#  ifdef ZgatewayRTL_433
-      case hash("RTL_433toMQTT"): {
-        // {"model":"Acurite-Tower","id":2043,"channel":"B","battery_ok":1,"temperature_C":5.3,"humidity":81,"mic":"CHECKSUM","protocol":"Acurite 592TXR Temp/Humidity, 5n1 Weather Station, 6045 Lightning, 3N1, Atlas","rssi":-81,"duration":121060}
-
-        // Line 1
-
-        strlcpy(message->line1, data["model"], OLED_TEXT_WIDTH);
-
-        // Line 2
-
-        String id = data["id"];
-        String channel = data["channel"];
-        String line2 = "id: " + id + " channel: " + channel;
-        line2.toCharArray(message->line2, OLED_TEXT_WIDTH);
-
-        // Line 3
-
-        String line3 = "";
-
-        if (data.containsKey("temperature_C")) {
-          float temperature_C = data["temperature_C"];
-          char temp[5];
-
-          if (displayMetric) {
-            dtostrf(temperature_C, 3, 1, temp);
-            line3 = "temp: " + (String)temp + "°C ";
-          } else {
-            dtostrf(convertTemp_CtoF(temperature_C), 3, 1, temp);
-            line3 = "temp: " + (String)temp + "°F ";
-          }
-        }
-
-        float humidity = data["humidity"];
-        if (data.containsKey("humidity") && humidity <= 100 && humidity >= 0) {
-          char hum[5];
-          dtostrf(humidity, 3, 1, hum);
-          line3 += "hum: " + (String)hum + "% ";
-        }
-        if (data.containsKey("wind_avg_km_h")) {
-          float wind_avg_km_h = data["wind_avg_km_h"];
-          char wind[6];
-
-          if (displayMetric) {
-            dtostrf(wind_avg_km_h, 3, 1, wind);
-            line3 += "wind: " + (String)wind + "km/h ";
-          } else {
-            dtostrf(convert_kmph2mph(wind_avg_km_h), 3, 1, wind);
-            line3 += "wind: " + (String)wind + "mp/h ";
-          }
-        }
-
-        line3.toCharArray(message->line3, OLED_TEXT_WIDTH);
-
-        // Line 4
-
-        String rssi = data["rssi"];
-        String battery_ok = data["battery_ok"];
-
-        String line4 = "batt: " + battery_ok + " rssi: " + rssi;
-        line4.toCharArray(message->line4, OLED_TEXT_WIDTH);
-
-        // Queue completed message
-
-        if (xQueueSend(displayQueue, (void*)&message, 0) != pdTRUE) {
-          Log.error(F("ERROR: displayQueue full, discarding signal %s" CR), message->title);
-        } else {
-          // Log.notice(F("Queued %s" CR), message->title);
-        }
-        break;
-      }
-#  endif
-#  ifdef ZsensorBME280
-      case hash("CLIMAtoMQTT"): {
-        // {"tempc":17.06,"tempf":62.708,"hum":50.0752,"pa":98876.14,"altim":205.8725,"altift":675.4348}
-
-        // Line 1
-
-        strlcpy(message->line1, "bme280", OLED_TEXT_WIDTH);
-
-        // Line 2
-
-        String line2 = "";
-        if (data.containsKey("tempc")) {
-          char temp[5];
-          float temperature_C = data["tempc"];
-
-          if (displayMetric) {
-            dtostrf(temperature_C, 3, 1, temp);
-            line2 = "temp: " + (String)temp + "°C ";
-          } else {
-            dtostrf(convertTemp_CtoF(temperature_C), 3, 1, temp);
-            line2 = "temp: " + (String)temp + "°F ";
-          }
-        }
-        line2.toCharArray(message->line2, OLED_TEXT_WIDTH);
-
-        // Line 3
-
-        String line3 = "";
-        float humidity = data["hum"];
-        if (data.containsKey("hum") && humidity <= 100 && humidity >= 0) {
-          char hum[5];
-          dtostrf(humidity, 3, 1, hum);
-          line3 += "hum: " + (String)hum + "% ";
-        }
-        line3.toCharArray(message->line3, OLED_TEXT_WIDTH);
-
-        // Line 4
-
-        float pa = (int)data["pa"] / 100;
-        char pressure[6];
-
-        String line4 = "";
-        if (displayMetric) {
-          dtostrf(pa, 3, 1, pressure);
-          line4 = "pressure: " + (String)pressure + " hPa";
-        } else {
-          dtostrf(convert_hpa2inhg(pa), 3, 1, pressure);
-          line4 = "pressure: " + (String)pressure + " inHg";
-        }
-        line4.toCharArray(message->line4, OLED_TEXT_WIDTH);
-
-        // Queue completed message
-
-        if (xQueueSend(displayQueue, (void*)&message, 0) != pdTRUE) {
-          Log.error(F("ERROR: displayQueue full, discarding signal %s" CR), message->title);
-          free(message);
-        } else {
-          // Log.notice(F("Queued %s" CR), message->title);
-        }
-        break;
-      }
-#  endif
-      default:
-        Log.error(F("ERROR: unhandled topic %s" CR), message->title);
+bool SSD1306Config_load() {
+  StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
+  preferences.begin(Gateway_Short_Name, true);
+  if (preferences.isKey("SSD1306Config")) {
+    auto error = deserializeJson(jsonBuffer, preferences.getString("SSD1306Config", "{}"));
+    preferences.end();
+    if (error) {
+      Log.error(F("SSD1306 config deserialization failed: %s, buffer capacity: %u" CR), error.c_str(), jsonBuffer.capacity());
+      return false;
     }
+    if (jsonBuffer.isNull()) {
+      Log.warning(F("SSD1306 config is null" CR));
+      return false;
+    }
+    JsonObject jo = jsonBuffer.as<JsonObject>();
+    displayState = jo["onstate"].as<bool>();
+    displayBrightness = jo["brightness"].as<int>();
+    logToOLEDDisplay = jo["log-oled"].as<bool>();
+    jsonDisplay = jo["json-oled"].as<bool>();
+    idlelogo = jo["idlelogo"].as<bool>();
+    displayFlip = jo["display-flip"].as<bool>();
+    Log.notice(F("Saved SSD1306 config loaded" CR));
+    return true;
+  } else {
+    preferences.end();
+    Log.notice(F("No SSD1306 config to load" CR));
+    return false;
   }
 }
 
@@ -379,30 +318,31 @@ void ssd1306Print(char* line1) {
 
 OledSerial Oled(0); // Not sure about this, came from Hardwareserial
 OledSerial::OledSerial(int x) {
-  displayQueue = xQueueCreate(5, sizeof(displayQueueMessage*));
 #  if defined(WIFI_Kit_32) || defined(WIFI_LoRa_32) || defined(WIFI_LoRa_32_V2)
-  pinMode(RST_OLED, OUTPUT);
+  pinMode(RST_OLED, OUTPUT); // https://github.com/espressif/arduino-esp32/issues/4278
   digitalWrite(RST_OLED, LOW);
   delay(50);
   digitalWrite(RST_OLED, HIGH);
   display = new SSD1306Wire(0x3c, SDA_OLED, SCL_OLED, GEOMETRY_128_64);
 #  elif defined(Wireless_Stick)
-  pinMode(RST_OLED, OUTPUT);
-  digitalWrite(RST_OLED, LOW);
-  delay(50);
-  digitalWrite(RST_OLED, HIGH);
+  // pinMode(RST_OLED, OUTPUT); // https://github.com/espressif/arduino-esp32/issues/4278
+  // digitalWrite(RST_OLED, LOW);
+  // delay(50);
+  // digitalWrite(RST_OLED, HIGH);
   display = new SSD1306Wire(0x3c, SDA_OLED, SCL_OLED, GEOMETRY_64_32);
 #  elif defined(ARDUINO_TTGO_LoRa32_v21new) // LILYGO® Disaster-Radio LoRa V2.1_1.6.1
-  pinMode(OLED_RST, OUTPUT);
-  digitalWrite(OLED_RST, LOW);
-  delay(50);
-  digitalWrite(OLED_RST, HIGH);
+  // pinMode(OLED_RST, OUTPUT);   // https://github.com/espressif/arduino-esp32/issues/4278
+  // digitalWrite(OLED_RST, LOW);
+  // delay(50);
+  // digitalWrite(OLED_RST, HIGH);
+  display = new SSD1306Wire(0x3c, OLED_SDA, OLED_SCL, GEOMETRY_128_64);
+#  elif defined(GenericSSD1306) // a generic ssd1306 oled with of size 128*64
   display = new SSD1306Wire(0x3c, OLED_SDA, OLED_SCL, GEOMETRY_128_64);
 #  endif
 }
 
 /*
-Initialize ssd1306 oled display for use, and display animated OMG logo
+Initialize ssd1306 oled display for use, and display OMG logo
 */
 void OledSerial::begin() {
   // SSD1306.begin(); // User OMG serial support
@@ -411,15 +351,21 @@ void OledSerial::begin() {
   xSemaphoreGive(semaphoreOLEDOperation);
 
   display->init();
-  display->flipScreenVertically();
+  if (displayFlip) {
+    display->flipScreenVertically();
+  } else {
+    display->resetOrientation();
+  }
   display->setFont(ArialMT_Plain_10);
-
-  display->setColor(WHITE);
-  display->fillRect(0, 0, OLED_WIDTH, OLED_HEIGHT);
-  display->display();
-  ssd1306Intro(OLED_WIDTH * 0.24, (OLED_WIDTH / 2) - OLED_WIDTH * 0.2, (OLED_HEIGHT / 2) + OLED_HEIGHT * 0.2);
+  display->setBrightness(round(displayBrightness * 2.55));
+  drawLogo(0, 0);
+  display->invertDisplay();
   display->setLogBuffer(OLED_TEXT_ROWS, OLED_TEXT_BUFFER);
   delay(1000);
+
+  if (!displayState) {
+    display->displayOff();
+  }
 }
 
 /*
@@ -447,7 +393,7 @@ void OledSerial::flush(void) {
 }
 
 /*
-Erase display and paint it with the color.  Used to 
+Erase display and paint it with the color.  Used to
 */
 void OledSerial::fillScreen(OLEDDISPLAY_COLOR color) {
   if (xSemaphoreTake(semaphoreOLEDOperation, pdMS_TO_TICKS(30000)) == pdTRUE) {
@@ -465,6 +411,7 @@ size_t OledSerial::write(const uint8_t* buffer, size_t size) {
   if (xPortGetCoreID() == CONFIG_ARDUINO_RUNNING_CORE) {
     if (xSemaphoreTake(semaphoreOLEDOperation, pdMS_TO_TICKS(30000)) == pdTRUE) {
       nextDisplayPage = uptime() + DISPLAY_PAGE_INTERVAL;
+      display->normalDisplay();
       display->clear();
       display->setColor(WHITE);
       display->setFont(ArialMT_Plain_10);
@@ -486,9 +433,10 @@ size_t OledSerial::write(const uint8_t* buffer, size_t size) {
 Display full page message on the display.
 - Used to display JSON messages published from each gateway module
 */
-boolean OledSerial::displayPage(displayQueueMessage* message) {
+boolean OledSerial::displayPage(webUIQueueMessage* message) {
   if (xPortGetCoreID() == CONFIG_ARDUINO_RUNNING_CORE) {
     if (xSemaphoreTake(semaphoreOLEDOperation, pdMS_TO_TICKS(30000)) == pdTRUE) {
+      display->normalDisplay();
       display->clear();
       display->setColor(WHITE);
       display->setFont(ArialMT_Plain_10);
@@ -510,83 +458,70 @@ boolean OledSerial::displayPage(displayQueueMessage* message) {
 }
 
 /*
-Display Animated OpenMQTTGateway logo, used on inital boot 
-- borrowed from ZboardM5.ino and tweaked for ssd1306 display ( removed color and tweaked size/location )
-*/
-void OledSerial::ssd1306Intro(int scale, int displayWidth, int displayHeight) {
-  drawLogo(scale, displayWidth, displayHeight, false, true, false, false, false, false); // Circle 2
-  drawLogo(scale, displayWidth, displayHeight, false, false, true, false, false, false); // Circle 3
-  drawLogo(scale, displayWidth, displayHeight, false, true, true, true, false, false); // Line 1
-  drawLogo(scale, displayWidth, displayHeight, false, true, true, false, true, false); // Line 2
-  drawLogo(scale, displayWidth, displayHeight, true, true, true, true, true, false); // Circle 1
-  drawLogo(scale, displayWidth, displayHeight, true, true, true, true, true, true); // Name
-}
-
-/*
 Primitives behind OpenMQTTGateway logo
 */
-void OledSerial::drawLogo(int logoSize, int circle1X, int circle1Y, bool circle1, bool circle2, bool circle3, bool line1, bool line2, bool name) {
+void OledSerial::drawLogo(int xshift, int yshift) {
   if (xSemaphoreTake(semaphoreOLEDOperation, pdMS_TO_TICKS(30000)) == pdTRUE) {
-    int circle1T = logoSize / 15;
-    int circle2T = logoSize / 25;
-    int circle3T = logoSize / 30;
+    display->setColor(WHITE);
+    // line 1
+    display->drawLine(15 + xshift, 28 + yshift, 20 + xshift, 31 + yshift);
+    display->drawLine(15 + xshift, 29 + yshift, 20 + xshift, 32 + yshift);
+    // line 2
+    display->drawLine(25 + xshift, 29 + yshift, 22 + xshift, 21 + yshift);
+    display->drawLine(26 + xshift, 29 + yshift, 23 + xshift, 21 + yshift);
+    // circle 1
+    display->fillCircle(25 + xshift, 35 + yshift, 7);
+    display->setColor(BLACK);
+    display->fillCircle(25 + xshift, 35 + yshift, 5);
+    // circle 2
+    display->setColor(WHITE);
+    display->fillCircle(23 + xshift, 18 + yshift, 4);
+    display->setColor(BLACK);
+    display->fillCircle(23 + xshift, 18 + yshift, 2);
+    // circle 3
+    display->setColor(WHITE);
+    display->fillCircle(11 + xshift, 25 + yshift, 5);
+    display->setColor(BLACK);
+    display->fillCircle(11 + xshift, 25 + yshift, 3);
+    // name
+    display->setColor(WHITE);
+    display->drawString(32 + xshift, 32 + yshift, "penMQTTGateway");
 
-    int circle3Y = circle1Y - (logoSize * 1.2);
-    int circle3X = circle1X - (logoSize * 0.13);
-    int circle2X = circle1X - (logoSize * 1.05);
-    int circle2Y = circle1Y - (logoSize * 0.8);
-
-    if (line1) {
-      display->setColor(BLACK);
-      display->drawLine(circle1X - 2, circle1Y, circle2X - 2, circle2Y);
-      display->drawLine(circle1X - 1, circle1Y, circle2X - 1, circle2Y);
-      display->drawLine(circle1X, circle1Y, circle2X, circle2Y);
-      display->drawLine(circle1X + 1, circle1Y, circle2X + 1, circle2Y);
-      display->drawLine(circle1X + 2, circle1Y, circle2X + 2, circle2Y);
-      display->setColor(WHITE);
-      display->fillCircle(circle3X, circle3Y, logoSize / 4 - circle3T * 2); // , WHITE);
-    }
-    if (line2) {
-      display->setColor(BLACK);
-      display->drawLine(circle1X - 2, circle1Y, circle3X - 2, circle3Y);
-      display->drawLine(circle1X - 1, circle1Y, circle3X - 1, circle3Y);
-      display->drawLine(circle1X, circle1Y, circle3X, circle3Y);
-      display->drawLine(circle1X + 1, circle1Y, circle3X + 1, circle3Y);
-      display->setColor(WHITE);
-      display->fillCircle(circle2X, circle2Y, logoSize / 3 - circle2T * 2); // , WHITE);
-    }
-    if (circle1) {
-      display->setColor(WHITE);
-      display->fillCircle(circle1X, circle1Y, logoSize / 2); // , WHITE);
-      display->setColor(BLACK);
-      display->fillCircle(circle1X, circle1Y, logoSize / 2 - circle1T); // , TFT_GREEN);
-      display->setColor(WHITE);
-      display->fillCircle(circle1X, circle1Y, logoSize / 2 - circle1T * 2); // , WHITE);
-    }
-    if (circle2) {
-      display->setColor(WHITE);
-      display->fillCircle(circle2X, circle2Y, logoSize / 3); // , WHITE);
-      display->setColor(BLACK);
-      display->fillCircle(circle2X, circle2Y, logoSize / 3 - circle2T); // , TFT_ORANGE);
-      display->setColor(WHITE);
-      display->fillCircle(circle2X, circle2Y, logoSize / 3 - circle2T * 2); // , WHITE);
-    }
-    if (circle3) {
-      display->setColor(WHITE);
-      display->fillCircle(circle3X, circle3Y, logoSize / 4); // , WHITE);
-      display->setColor(BLACK);
-      display->fillCircle(circle3X, circle3Y, logoSize / 4 - circle3T); // , TFT_PINK);
-      display->setColor(WHITE);
-      display->fillCircle(circle3X, circle3Y, logoSize / 4 - circle3T * 2); // , WHITE);
-    }
-    if (name) {
-      display->setColor(BLACK);
-      display->drawString(circle1X + (circle1X * 0.27), circle1Y, "penMQTTGateway");
-    }
     display->display();
-    delay(50);
     xSemaphoreGive(semaphoreOLEDOperation);
   }
+}
+
+String stateSSD1306Display() {
+  //Publish display state
+  StaticJsonDocument<JSON_MSG_BUFFER> DISPLAYdataBuffer;
+  JsonObject DISPLAYdata = DISPLAYdataBuffer.to<JsonObject>();
+  DISPLAYdata["onstate"] = (bool)displayState;
+  DISPLAYdata["brightness"] = (int)displayBrightness;
+  DISPLAYdata["display-flip"] = (bool)displayFlip;
+  DISPLAYdata["idlelogo"] = (bool)idlelogo;
+  DISPLAYdata["log-oled"] = (bool)logToOLEDDisplay;
+  DISPLAYdata["json-oled"] = (bool)jsonDisplay;
+  DISPLAYdata["origin"] = subjectSSD1306toMQTT;
+  handleJsonEnqueue(DISPLAYdata);
+
+  // apply
+  Oled.display->setBrightness(round(displayBrightness * 2.55));
+
+  if (!displayState) {
+    Oled.display->displayOff();
+  } else {
+    Oled.display->displayOn();
+  }
+
+  if (displayFlip) {
+    Oled.display->flipScreenVertically();
+  } else {
+    Oled.display->resetOrientation();
+  }
+  String output;
+  serializeJson(DISPLAYdata, output);
+  return output;
 }
 
 #endif

@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
     DHT reading Addon
@@ -55,8 +55,8 @@ void MeasureTempAndHum() {
       Log.error(F("Failed to read from DHT sensor!" CR));
     } else {
       Log.trace(F("Creating DHT buffer" CR));
-      StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-      JsonObject DHTdata = jsonBuffer.to<JsonObject>();
+      StaticJsonDocument<JSON_MSG_BUFFER> DHTdataBuffer;
+      JsonObject DHTdata = DHTdataBuffer.to<JsonObject>();
       if (h != persistedh || dht_always) {
         DHTdata["hum"] = (float)h;
       } else {
@@ -68,8 +68,8 @@ void MeasureTempAndHum() {
       } else {
         Log.trace(F("Same temp don't send it" CR));
       }
-      if (DHTdata.size() > 0)
-        pub(DHTTOPIC, DHTdata);
+      DHTdata["origin"] = DHTTOPIC;
+      handleJsonEnqueue(DHTdata);
     }
     persistedh = h;
     persistedt = t;

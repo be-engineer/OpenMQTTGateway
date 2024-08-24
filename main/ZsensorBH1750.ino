@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
    This is the Light Meter Addon:
@@ -11,13 +11,13 @@
    Connection Schemata:
    --------------------
 
-   BH1750 ------> Arduino Uno ----------> ESP8266
+   BH1750 ------> ESP8266
    ==============================================
-   Vcc ---------> 5V -------------------> Vu (5V)
-   GND ---------> GND ------------------> GND
-   SCL ---------> Pin A5 ---------------> D1
-   SDA ---------> Pin A4 ---------------> D2
-   ADD ---------> N/C (Not Connected) --> N/C (Not Connected)
+   Vcc ---------> Vu (5V)
+   GND ---------> GND
+   SCL ---------> D1
+   SDA ---------> D2
+   ADD ---------> N/C (Not Connected)
  
     Copyright: (c) Hans-Juergen Dinges
   
@@ -54,8 +54,8 @@ void setupZsensorBH1750() {
 void MeasureLightIntensity() {
   if (millis() > (timebh1750 + TimeBetweenReadingBH1750)) { //retrieving value of Lux, FtCd and Wattsm2 from BH1750
     Log.trace(F("Creating BH1750 buffer" CR));
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject BH1750data = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> BH1750dataBuffer;
+    JsonObject BH1750data = BH1750dataBuffer.to<JsonObject>();
 
     timebh1750 = millis();
     unsigned int i = 0;
@@ -100,8 +100,8 @@ void MeasureLightIntensity() {
       } else {
         Log.trace(F("Same wattsm2 don't send it" CR));
       }
-      if (BH1750data.size() > 0)
-        pub(subjectBH1750toMQTT, BH1750data);
+      BH1750data["origin"] = subjectBH1750toMQTT;
+      handleJsonEnqueue(BH1750data);
     }
     persistedll = Lux;
     persistedlf = ftcd;

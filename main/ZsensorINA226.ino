@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
     INA226 reading Addon
@@ -53,8 +53,8 @@ void MeasureINA226() {
   if (millis() > (timeINA226 + TimeBetweenReadingINA226)) { //retrieving value of temperature and humidity of the box from DHT every xUL
     timeINA226 = millis();
     Log.trace(F("Creating INA226 buffer" CR));
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject INA226data = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> INA226dataBuffer;
+    JsonObject INA226data = INA226dataBuffer.to<JsonObject>();
     // Topic on which we will send data
     Log.trace(F("Retrieving electrical data" CR));
     // Bus Spannung, read-only, 16Bit, 0...40.96V max., LSB 1.25mV
@@ -69,16 +69,11 @@ void MeasureINA226() {
     float current = shuntvolt * 0.0000025 / rShunt; // * LSB / R
     float power = abs(volt * current);
 
-    char volt_c[7];
-    char current_c[7];
-    char power_c[7];
-    dtostrf(volt, 6, 3, volt_c);
-    dtostrf(current, 6, 3, current_c);
-    dtostrf(power, 6, 3, power_c);
-    INA226data["volt"] = (char*)volt_c;
-    INA226data["current"] = (char*)current_c;
-    INA226data["power"] = (char*)power_c;
-    pub(subjectINA226toMQTT, INA226data);
+    INA226data["volt"] = volt;
+    INA226data["current"] = current;
+    INA226data["power"] = power;
+    INA226data["origin"] = subjectINA226toMQTT;
+    handleJsonEnqueue(INA226data);
   }
 }
 

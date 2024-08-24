@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
  
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
    
    This is the Climate Addon:
@@ -13,12 +13,12 @@
    Connection Schemata:
    --------------------
 
-   HTU21 ------> Arduino Uno ----------> ESP8266
+   HTU21 ------> ESP8266
    ==============================================
-   Vcc ---------> 5V -------------------> Vu (5V)
-   GND ---------> GND ------------------> GND
-   SCL ---------> Pin A5 ---------------> D1
-   SDA ---------> Pin A4 ---------------> D2
+   Vcc ---------> Vu (5V)
+   GND ---------> GND
+   SCL ---------> D1
+   SDA ---------> D2
    
     This file is part of OpenMQTTGateway.
     
@@ -83,8 +83,8 @@ void MeasureTempHum() {
       Log.error(F("Failed to read from sensor HTU21!" CR));
     } else {
       Log.notice(F("Creating HTU21 buffer" CR));
-      StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-      JsonObject HTU21data = jsonBuffer.to<JsonObject>();
+      StaticJsonDocument<JSON_MSG_BUFFER> HTU21dataBuffer;
+      JsonObject HTU21data = HTU21dataBuffer.to<JsonObject>();
       // Generate Temperature in degrees C
       if (HtuTempC != persisted_htu_tempc || htu21_always) {
         float HtuTempF = (HtuTempC * 1.8) + 32;
@@ -100,9 +100,8 @@ void MeasureTempHum() {
       } else {
         Log.notice(F("Same Humidity. Don't send it" CR));
       }
-
-      if (HTU21data.size() > 0)
-        pub(HTUTOPIC, HTU21data);
+      HTU21data["origin"] = HTUTOPIC;
+      handleJsonEnqueue(HTU21data);
     }
     persisted_htu_tempc = HtuTempC;
     persisted_htu_hum = HtuHum;

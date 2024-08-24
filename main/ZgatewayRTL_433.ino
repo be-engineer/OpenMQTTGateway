@@ -1,7 +1,7 @@
 /*
   OpenMQTTGateway  - ESP8266 or Arduino program for home automation
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
 
   This gateway enables to:
@@ -40,60 +40,63 @@
 
 char messageBuffer[JSON_MSG_BUFFER];
 
-rtl_433_ESP rtl_433(-1);
-
 #  ifdef ZmqttDiscovery
 SemaphoreHandle_t semaphorecreateOrUpdateDeviceRTL_433;
 std::vector<RTL_433device*> RTL_433devices;
 int newRTL_433Devices = 0;
 
-static RTL_433device NO_DEVICE_FOUND = {{0},
-                                        0,
-                                        false};
+static RTL_433device NO_RTL_433_DEVICE_FOUND = {{0},
+                                                0,
+                                                false};
 
 RTL_433device* getDeviceById(const char* id); // Declared here to avoid pre-compilation issue (misplaced auto declaration by pio)
 RTL_433device* getDeviceById(const char* id) {
-  Log.trace(F("getDeviceById %s" CR), id);
+  DISCOVERY_TRACE_LOG(F("getDeviceById %s" CR), id);
 
   for (std::vector<RTL_433device*>::iterator it = RTL_433devices.begin(); it != RTL_433devices.end(); ++it) {
     if ((strcmp((*it)->uniqueId, id) == 0)) {
       return *it;
     }
   }
-  return &NO_DEVICE_FOUND;
+  return &NO_RTL_433_DEVICE_FOUND;
 }
 
 void dumpRTL_433Devices() {
   for (std::vector<RTL_433device*>::iterator it = RTL_433devices.begin(); it != RTL_433devices.end(); ++it) {
     RTL_433device* p = *it;
-    Log.trace(F("uniqueId %s" CR), p->uniqueId);
-    Log.trace(F("modelName %s" CR), p->modelName);
-    Log.trace(F("isDisc %d" CR), p->isDisc);
+    DISCOVERY_TRACE_LOG(F("uniqueId %s" CR), p->uniqueId);
+    DISCOVERY_TRACE_LOG(F("modelName %s" CR), p->modelName);
+    DISCOVERY_TRACE_LOG(F("type %s" CR), p->type);
+    DISCOVERY_TRACE_LOG(F("isDisc %d" CR), p->isDisc);
   }
 }
 
-void createOrUpdateDeviceRTL_433(const char* id, const char* model, uint8_t flags) {
+void createOrUpdateDeviceRTL_433(const char* id, const char* model, const char* type, uint8_t flags) {
   if (xSemaphoreTake(semaphorecreateOrUpdateDeviceRTL_433, pdMS_TO_TICKS(30000)) == pdFALSE) {
     Log.error(F("[rtl_433] semaphorecreateOrUpdateDeviceRTL_433 Semaphore NOT taken" CR));
     return;
   }
 
   RTL_433device* device = getDeviceById(id);
-  if (device == &NO_DEVICE_FOUND) {
-    Log.trace(F("add %s" CR), id);
+  if (device == &NO_RTL_433_DEVICE_FOUND) {
+    DISCOVERY_TRACE_LOG(F("add %s" CR), id);
     //new device
     device = new RTL_433device();
     if (strlcpy(device->uniqueId, id, uniqueIdSize) > uniqueIdSize) {
       Log.warning(F("[rtl_433] Device id %s exceeds available space" CR), id); // Remove from production release ?
     };
     if (strlcpy(device->modelName, model, modelNameSize) > modelNameSize) {
-      Log.warning(F("[rtl_433] Device model %s exceeds available space" CR), id); // Remove from production release ?
+      Log.warning(F("[rtl_433] Device model %s exceeds available space" CR), model); // Remove from production release ?
     };
+    if (strlcpy(device->type, type, typeSize) > typeSize) {
+      Log.warning(F("[rtl_433] Device type %s exceeds available space" CR), type); // Remove from production release ?
+    }
+    DISCOVERY_TRACE_LOG(F("[rtl_433] Device type is %s." CR), device->type); // Remove from production release ?
     device->isDisc = flags & device_flags_isDisc;
     RTL_433devices.push_back(device);
     newRTL_433Devices++;
   } else {
-    Log.trace(F("update %s" CR), id);
+    DISCOVERY_TRACE_LOG(F("update %s" CR), id);
 
     if (flags & device_flags_isDisc) {
       device->isDisc = true;
@@ -108,7 +111,7 @@ void createOrUpdateDeviceRTL_433(const char* id, const char* model, uint8_t flag
 void launchRTL_433Discovery(bool overrideDiscovery) {
   if (!overrideDiscovery && newRTL_433Devices == 0)
     return;
-  if (xSemaphoreTake(semaphorecreateOrUpdateDeviceRTL_433, pdMS_TO_TICKS(1000)) == pdFALSE) {
+  if (xSemaphoreTake(semaphorecreateOrUpdateDeviceRTL_433, pdMS_TO_TICKS(QueueSemaphoreTimeOutLoop)) == pdFALSE) {
     Log.error(F("[rtl_433] semaphorecreateOrUpdateDeviceRTL_433 Semaphore NOT taken" CR));
     return;
   }
@@ -117,35 +120,84 @@ void launchRTL_433Discovery(bool overrideDiscovery) {
   xSemaphoreGive(semaphorecreateOrUpdateDeviceRTL_433);
   for (std::vector<RTL_433device*>::iterator it = localDevices.begin(); it != localDevices.end(); ++it) {
     RTL_433device* pdevice = *it;
-    Log.trace(F("Device id %s" CR), pdevice->uniqueId);
+    DISCOVERY_TRACE_LOG(F("Device id %s" CR), pdevice->uniqueId);
     // Do not launch discovery for the RTL_433devices already discovered (unless we have overrideDiscovery) or that are not unique by their MAC Address (Ibeacon, GAEN and Microsoft Cdp)
     if (overrideDiscovery || !isDiscovered(pdevice)) {
       size_t numRows = sizeof(parameters) / sizeof(parameters[0]);
       for (int i = 0; i < numRows; i++) {
-        if (strstr(pdevice->uniqueId, parameters[i][0]) != 0) {
+        char deviceKeyParameter[25];
+        memcpy(deviceKeyParameter, &pdevice->uniqueId[strlen(pdevice->uniqueId) - strlen(parameters[i][0])], strlen(parameters[i][0]));
+        deviceKeyParameter[strlen(parameters[i][0])] = '\0';
+        Log.trace(F("deviceKeyParameter: %s" CR), deviceKeyParameter);
+
+        if (strcmp(deviceKeyParameter, parameters[i][0]) == 0) {
           // Remove the key from the unique id to extract the device id
           String idWoKey = pdevice->uniqueId;
           idWoKey.remove(idWoKey.length() - (strlen(parameters[i][0]) + 1));
-          Log.trace(F("idWoKey %s" CR), idWoKey.c_str());
-#    if OpenHABDiscovery
-          String value_template = "{{ value_json." + String(parameters[i][0]) + "}}";
-#    else
-          String value_template = "{{ value_json." + String(parameters[i][0]) + " | is_defined }}";
-#    endif
+          DISCOVERY_TRACE_LOG(F("idWoKey %s" CR), idWoKey.c_str());
+          String value_template = "";
+          if (SYSConfig.ohdiscovery) {
+            value_template = "{{ value_json." + String(parameters[i][0]) + " }}";
+          } else {
+            value_template = "{{ value_json." + String(parameters[i][0]) + " | is_defined }}";
+          }
           String topic = subjectRTL_433toMQTT;
 #    if valueAsATopic
           // Remove the key from the unique id to extract the device id
           String idWoKeyAndModel = idWoKey;
-          idWoKeyAndModel.remove(0, strlen(pdevice->modelName));
+          if (strcmp(pdevice->type, "null")) {
+            idWoKeyAndModel.remove(0, (strlen(pdevice->modelName) + strlen(pdevice->type) + 1)); // type is present
+            topic = topic + "/" + String(pdevice->type) + "/" + String(pdevice->modelName);
+          } else {
+            idWoKeyAndModel.remove(0, (strlen(pdevice->modelName)));
+            topic = topic + "/" + String(pdevice->modelName);
+          }
+          DISCOVERY_TRACE_LOG(F("idWoKeyAndModel %s" CR), idWoKeyAndModel.c_str());
           idWoKeyAndModel.replace("-", "/");
-          Log.trace(F("idWoKeyAndModel %s" CR), idWoKeyAndModel.c_str());
-          topic = topic + "/" + String(pdevice->modelName) + idWoKeyAndModel;
+          topic = topic + idWoKeyAndModel;
 #    endif
-          if (strcmp(parameters[i][0], "tamper") == 0 || strcmp(parameters[i][0], "alarm") == 0 || strcmp(parameters[i][0], "motion") == 0) {
+          if (strcmp(parameters[i][0], "battery_ok") == 0) {
+            if (strcmp(pdevice->modelName, "Govee-Water") == 0 || strcmp(pdevice->modelName, "Govee-Contact") == 0 || strcmp(pdevice->modelName, "Archos-TBH") == 0 || strcmp(pdevice->modelName, "FineOffset-WH31L") == 0 || strcmp(pdevice->modelName, "Fineoffset-WH45") == 0 || strcmp(pdevice->modelName, "Fineoffset-WN34") == 0 || strcmp(pdevice->modelName, "Fineoffset-WS80") == 0 || strcmp(pdevice->modelName, "Fineoffset-WH0290") == 0 || strcmp(pdevice->modelName, "Fineoffset-WH51") == 0 || strcmp(pdevice->modelName, "Kedsum-TH") == 0 || strcmp(pdevice->modelName, "AVE") == 0 || strcmp(pdevice->modelName, "TPMS") == 0) {
+              if (SYSConfig.ohdiscovery) {
+                value_template = "{{ (value_json." + String(parameters[i][0]) + " * 100) | round(0)}}";
+              } else {
+                value_template = "{{ (float(value_json." + String(parameters[i][0]) + ") * 100) | round(0) | is_defined }}";
+              }
+              createDiscovery("sensor", //set Type
+                              (char*)topic.c_str(), parameters[i][1], pdevice->uniqueId, //set state_topic,name,uniqueId
+                              "", parameters[i][3], (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
+                              "", "", "%", //set,payload_on,payload_off,unit_of_meas,
+                              0, //set  off_delay
+                              "", "", false, "", //set,payload_available,payload_not available   ,is a gateway entity, command topic
+                              (char*)idWoKey.c_str(), "", pdevice->modelName, (char*)idWoKey.c_str(), false, // device name, device manufacturer, device model, device ID, retain
+                              stateClassMeasurement //State Class
+              );
+            } else {
+              createDiscovery("binary_sensor", //set Type
+                              (char*)topic.c_str(), parameters[i][1], pdevice->uniqueId, //set state_topic,name,uniqueId
+                              "", parameters[i][3], (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
+                              "0", "1", "", //set,payload_on,payload_off,unit_of_meas,
+                              0, //set  off_delay
+                              "", "", false, "", //set,payload_available,payload_not available   ,is a gateway entity, command topic
+                              (char*)idWoKey.c_str(), "", pdevice->modelName, (char*)idWoKey.c_str(), false, // device name, device manufacturer, device model, device ID, retain
+                              "" //State Class
+              );
+            }
+          } else if (strcmp(parameters[i][0], "tamper") == 0 || strcmp(parameters[i][0], "alarm") == 0 || strcmp(parameters[i][0], "motion") == 0) {
             createDiscovery("binary_sensor", //set Type
                             (char*)topic.c_str(), parameters[i][1], pdevice->uniqueId, //set state_topic,name,uniqueId
-                            "", "", (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
+                            "", parameters[i][3], (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
                             "1", "0", parameters[i][2], //set,payload_on,payload_off,unit_of_meas,
+                            0, //set  off_delay
+                            "", "", false, "", //set,payload_available,payload_not available   ,is a gateway entity, command topic
+                            (char*)idWoKey.c_str(), "", pdevice->modelName, (char*)idWoKey.c_str(), false, // device name, device manufacturer, device model, device ID, retain
+                            "" //State Class
+            );
+          } else if (strcmp(parameters[i][0], "state") == 0 && (strcmp(pdevice->modelName, "Nexa-Security") == 0 || strcmp(pdevice->modelName, "Brennenstuhl-RCS2044") == 0 || strcmp(pdevice->modelName, "Proove-Security") == 0 || strcmp(pdevice->modelName, "Waveman-Switch") == 0)) {
+            createDiscovery("binary_sensor", //set Type
+                            (char*)topic.c_str(), parameters[i][1], pdevice->uniqueId, //set state_topic,name,uniqueId
+                            "", parameters[i][3], (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
+                            "ON", "OFF", parameters[i][2], //set,payload_on,payload_off,unit_of_meas,
                             0, //set  off_delay
                             "", "", false, "", //set,payload_available,payload_not available   ,is a gateway entity, command topic
                             (char*)idWoKey.c_str(), "", pdevice->modelName, (char*)idWoKey.c_str(), false, // device name, device manufacturer, device model, device ID, retain
@@ -154,17 +206,27 @@ void launchRTL_433Discovery(bool overrideDiscovery) {
           } else if (strcmp(parameters[i][0], "strike_count") == 0) {
             createDiscovery("sensor", //set Type
                             (char*)topic.c_str(), parameters[i][1], pdevice->uniqueId, //set state_topic,name,uniqueId
-                            "", "", (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
+                            "", parameters[i][3], (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
                             "1", "0", parameters[i][2], //set,payload_on,payload_off,unit_of_meas,
                             0, //set  off_delay
                             "", "", false, "", //set,payload_available,payload_not available   ,is a gateway entity, command topic
                             (char*)idWoKey.c_str(), "", pdevice->modelName, (char*)idWoKey.c_str(), false, // device name, device manufacturer, device model, device ID, retain
                             stateClassTotalIncreasing //State Class
             );
-          } else {
+          } else if (strcmp(parameters[i][0], "event") == 0 && strcmp(pdevice->modelName, "Govee-Water") == 0) { //the entity will detect Water Leak Event and go back to Off state after 60seconds
+            createDiscovery("binary_sensor", //set Type
+                            (char*)topic.c_str(), parameters[i][1], pdevice->uniqueId, //set state_topic,name,uniqueId
+                            "", parameters[i][3], (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
+                            "Water Leak", "", parameters[i][2], //set,payload_on,payload_off,unit_of_meas,
+                            60, //set  off_delay
+                            "", "", false, "", //set,payload_available,payload_not available   ,is a gateway entity, command topic
+                            (char*)idWoKey.c_str(), "Govee", pdevice->modelName, (char*)idWoKey.c_str(), false, // device name, device manufacturer, device model, device ID, retain
+                            stateClassMeasurement //State Class
+            );
+          } else if (strcmp(pdevice->modelName, "Interlogix-Security") != 0) {
             createDiscovery("sensor", //set Type
                             (char*)topic.c_str(), parameters[i][1], pdevice->uniqueId, //set state_topic,name,uniqueId
-                            "", "", (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
+                            "", parameters[i][3], (char*)value_template.c_str(), //set availability_topic,device_class,value_template,
                             "", "", parameters[i][2], //set,payload_on,payload_off,unit_of_meas,
                             0, //set  off_delay
                             "", "", false, "", //set,payload_available,payload_not available   ,is a gateway entity, command topic
@@ -178,15 +240,15 @@ void launchRTL_433Discovery(bool overrideDiscovery) {
         }
       }
       if (!pdevice->isDisc) {
-        Log.trace(F("Device id %s was not discovered" CR), pdevice->uniqueId); // Remove from production release ?
+        DISCOVERY_TRACE_LOG(F("Device id %s was not discovered" CR), pdevice->uniqueId); // Remove from production release ?
       }
     } else {
-      Log.trace(F("Device already discovered or that doesn't require discovery %s" CR), pdevice->uniqueId);
+      DISCOVERY_TRACE_LOG(F("Device already discovered or that doesn't require discovery %s" CR), pdevice->uniqueId);
     }
   }
 }
 
-void storeRTL_433Discovery(JsonObject& RFrtl_433_ESPdata, const char* model, const char* uniqueid) {
+void storeRTL_433Discovery(JsonObject& RFrtl_433_ESPdata, const char* model, const char* type, const char* uniqueid) {
   //Sanitize model name
   String modelSanitized = model;
   modelSanitized.replace(" ", "_");
@@ -200,12 +262,10 @@ void storeRTL_433Discovery(JsonObject& RFrtl_433_ESPdata, const char* model, con
   for (int i = 0; i < numRows; i++) {
     if (RFrtl_433_ESPdata.containsKey(parameters[i][0])) {
       String key_id = String(uniqueid) + "-" + String(parameters[i][0]);
-      createOrUpdateDeviceRTL_433((char*)key_id.c_str(), (char*)modelSanitized.c_str(), device_flags_init);
+      createOrUpdateDeviceRTL_433((char*)key_id.c_str(), (char*)modelSanitized.c_str(), (char*)type, device_flags_init);
     }
   }
 }
-#  else
-void storeRTL_433Discovery(JsonObject& RFrtl_433_ESPdata, const char* model, const char* uniqueid) {}
 #  endif
 
 void rtl_433_Callback(char* message) {
@@ -220,6 +280,8 @@ void rtl_433_Callback(char* message) {
   unsigned long MQTTvalue = (int)RFrtl_433_ESPdata["id"] + round((float)RFrtl_433_ESPdata["temperature_C"]);
   String topic = subjectRTL_433toMQTT;
   String model = RFrtl_433_ESPdata["model"];
+  String type = RFrtl_433_ESPdata["type"];
+  Log.notice(F("type: %s" CR), type.c_str());
   String uniqueid;
 
   const char naming_keys[5][8] = {"type", "model", "subtype", "channel", "id"}; // from rtl_433_mqtt_hass.py
@@ -240,10 +302,15 @@ void rtl_433_Callback(char* message) {
 
   uniqueid.replace("/", "-");
 
-  Log.notice(F("uniqueid: %s" CR), uniqueid.c_str());
+  DISCOVERY_TRACE_LOG(F("uniqueid: %s" CR), uniqueid.c_str());
   if (!isAduplicateSignal(MQTTvalue)) {
-    storeRTL_433Discovery(RFrtl_433_ESPdata, (char*)model.c_str(), (char*)uniqueid.c_str());
-    pub((char*)topic.c_str(), RFrtl_433_ESPdata);
+#  ifdef ZmqttDiscovery
+    if (SYSConfig.discovery)
+      storeRTL_433Discovery(RFrtl_433_ESPdata, (char*)model.c_str(), (char*)type.c_str(), (char*)uniqueid.c_str());
+#  endif
+    //RFrtl_433_ESPdata["origin"] = (char*)topic.c_str();
+    //handleJsonEnqueue(RFrtl_433_ESPdata);
+    pub(topic.c_str(), RFrtl_433_ESPdata);
     storeSignalValue(MQTTvalue);
     pubOled((char*)topic.c_str(), RFrtl_433_ESPdata);
   }
@@ -258,7 +325,7 @@ void setupRTL_433() {
   semaphorecreateOrUpdateDeviceRTL_433 = xSemaphoreCreateBinary();
   xSemaphoreGive(semaphorecreateOrUpdateDeviceRTL_433);
 #  endif
-  Log.trace(F("ZgatewayRTL_433 command topic: %s%s%s" CR), mqtt_topic, gateway_name, subjectMQTTtoRTL_433);
+  Log.trace(F("ZgatewayRTL_433 command topic: %s%s%s" CR), mqtt_topic, gateway_name, subjectMQTTtoRFset);
   Log.notice(F("ZgatewayRTL_433 setup done " CR));
 }
 
@@ -266,75 +333,14 @@ void RTL_433Loop() {
   rtl_433.loop();
 }
 
-extern void MQTTtoRTL_433(char* topicOri, JsonObject& RTLdata) {
-  if (cmpToMainTopic(topicOri, subjectMQTTtoRTL_433)) {
-    float tempMhz = RTLdata["mhz"];
-    bool success = false;
-    if (RTLdata.containsKey("mhz") && validFrequency(tempMhz)) {
-      receiveMhz = tempMhz;
-      Log.notice(F("RTL_433 Receive mhz: %F" CR), receiveMhz);
-      success = true;
-    }
-    if (RTLdata.containsKey("active")) {
-      Log.trace(F("RTL_433 active:" CR));
-      activeReceiver = ACTIVE_RTL; // Enable RTL_433 Gateway
-      success = true;
-    }
-    if (RTLdata.containsKey("rssi")) {
-      int rssiThreshold = RTLdata["rssi"] | 0;
-      Log.notice(F("RTL_433 RSSI Threshold Delta: %d " CR), rssiThreshold);
-      rtl_433.setRSSIThreshold(rssiThreshold);
-      success = true;
-    }
-#  if defined(RF_SX1276) || defined(RF_SX1278)
-    if (RTLdata.containsKey("ookThreshold")) {
-      int newOokThreshold = RTLdata["ookThreshold"] | 0;
-      Log.notice(F("RTL_433 ookThreshold %d" CR), newOokThreshold);
-      rtl_433.setOOKThreshold(newOokThreshold);
-      success = true;
-    }
-#  endif
-    if (RTLdata.containsKey("debug")) {
-      int debug = RTLdata["debug"] | -1;
-      Log.notice(F("RTL_433 set debug: %d" CR), debug);
-      // rtl_433.setDebug(debug);
-      rtl_433.initReceiver(RF_MODULE_RECEIVER_GPIO, receiveMhz);
-      success = true;
-    }
-    if (RTLdata.containsKey("status")) {
-      Log.notice(F("RTL_433 get status:" CR));
-      rtl_433.getStatus(1);
-      success = true;
-    }
-    if (success) {
-      pub(subjectRTL_433toMQTT, RTLdata);
-    } else {
-      pub(subjectRTL_433toMQTT, "{\"Status\": \"Error\"}"); // Fail feedback
-      Log.error(F("[rtl_433] MQTTtoRTL_433 Fail json" CR));
-    }
-    enableActiveReceiver(false);
-  }
-}
-
 extern void enableRTLreceive() {
-  Log.notice(F("Switching to RTL_433 Receiver: %FMhz" CR), receiveMhz);
-#  ifdef ZgatewayRF
-  disableRFReceive();
-#  endif
-#  ifdef ZgatewayRF2
-  disableRF2Receive();
-#  endif
-#  ifdef ZgatewayPilight
-  disablePilightReceive();
-#  endif
-
-  rtl_433.initReceiver(RF_MODULE_RECEIVER_GPIO, receiveMhz);
-  rtl_433.enableReceiver(RF_MODULE_RECEIVER_GPIO);
+  Log.notice(F("Enable RTL_433 Receiver: %FMhz" CR), RFConfig.frequency);
+  rtl_433.initReceiver(RF_MODULE_RECEIVER_GPIO, RFConfig.frequency);
+  rtl_433.enableReceiver();
 }
 
 extern void disableRTLreceive() {
   Log.trace(F("disableRTLreceive" CR));
-  rtl_433.enableReceiver(-1);
   rtl_433.disableReceiver();
 }
 

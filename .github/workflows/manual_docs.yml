@@ -7,13 +7,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Create the documentation and deploy it to GitHub Pages
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Set up Node.js
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v3
         with:
           node-version: "14.x"
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: "3.7"
       - name: Install build dependencies
@@ -21,6 +21,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests pandas markdown pytablereader tabulate
           npm install
+      - name: Download Common Config
+        run: |
+          curl -o docs/.vuepress/public/commonConfig.js https://www.theengs.io/commonConfig.js
       - name: get lastest release tag
         id: last_release
         uses: InsonusK/get-latest-release@v1.0.1
@@ -28,7 +31,7 @@ jobs:
           myToken: ${{ github.token }}
           view_top: 1
       - name: Set version tag from git
-        run: sed -i "s/version_tag/${{steps.last_release.outputs.tag_name}}/g" docs/.vuepress/config.js
+        run: sed -i "s/version_tag/${{steps.last_release.outputs.tag_name}}/g" docs/.vuepress/config.js scripts/latest_version.json
       - name: Build documentation
         run: |
           python ./scripts/generate_board_docs.py

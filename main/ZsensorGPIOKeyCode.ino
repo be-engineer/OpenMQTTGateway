@@ -1,6 +1,6 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
     GPIO KeyCode derived from  GPIO Input
@@ -49,9 +49,7 @@ void MeasureGPIOKeyCode() {
   {
     // whatever the reading is at, it's been there for longer than the debounce
     // delay, so take it as the actual current state:
-#  if defined(ESP8266) || defined(ESP32)
     yield();
-#  endif
     // if the Input state has changed:
     if (latch > 0 && lastLatchStateGPIOKeyCode != latch) {
       int reading = digitalRead(GPIOKeyCode_D0_GPIO) | (digitalRead(GPIOKeyCode_D1_GPIO) << 1) | (digitalRead(GPIOKeyCode_D2_GPIO) << 2);

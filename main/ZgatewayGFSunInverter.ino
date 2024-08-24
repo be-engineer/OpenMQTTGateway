@@ -1,5 +1,5 @@
 /*
-  OpenMQTTGateway  - ESP8266 or Arduino program for home automation
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
    Act as a wifi or ethernet gateway between your GridFree SUN-2000G inverter and a MQTT broker.
    Send inverter metrics by MQTT.
@@ -30,8 +30,8 @@
 GfSun2000 GF = GfSun2000();
 
 void GFSunInverterDataHandler(GfSun2000Data data) {
-  StaticJsonDocument<2 * JSON_MSG_BUFFER> jsonBuffer;
-  JsonObject jdata = jsonBuffer.to<JsonObject>();
+  StaticJsonDocument<JSON_MSG_BUFFER> jdataBuffer;
+  JsonObject jdata = jdataBuffer.to<JsonObject>();
 
   jdata["device_id"] = (char*)data.deviceID;
   Log.trace(F("Device ID     : %s\n" CR), data.deviceID);
@@ -47,8 +47,8 @@ void GFSunInverterDataHandler(GfSun2000Data data) {
   Log.trace(F("Total Energy  : %.1f\tkW/h\n" CR), data.totalEnergyCounter);
 
 #  ifdef GFSUNINVERTER_DEVEL
-  StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer2;
-  JsonObject jregister = jsonBuffer2.to<JsonObject>();
+  StaticJsonDocument<JSON_MSG_BUFFER> jregisterBuffer;
+  JsonObject jregister = jregisterBuffer.to<JsonObject>();
   char buffer[4];
   std::map<int16_t, int16_t>::iterator itr;
   for (itr = data.modbusRegistry.begin(); itr != data.modbusRegistry.end(); ++itr) {
@@ -58,19 +58,21 @@ void GFSunInverterDataHandler(GfSun2000Data data) {
   }
   jdata["register"] = jregister;
 #  endif
-  pub(subjectRFtoMQTT, jdata);
+  jdata["origin"] = subjectRFtoMQTT;
+  handleJsonEnqueue(jdata);
 }
 
 void GFSunInverterErrorHandler(int errorId, char* errorMessage) {
   char buffer[50];
   sprintf(buffer, "Error response: %02X - %s\n", errorId, errorMessage);
   Log.error(buffer);
-  StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-  JsonObject jdata = jsonBuffer.to<JsonObject>();
+  StaticJsonDocument<JSON_MSG_BUFFER> jdataBuffer;
+  JsonObject jdata = jdataBuffer.to<JsonObject>();
   jdata["status"] = "error";
   jdata["msg"] = errorMessage;
   jdata["id"] = errorId;
-  pub(subjectRFtoMQTT, jdata);
+  jdata["origin"] = subjectRFtoMQTT;
+  handleJsonEnqueue(jdata);
 }
 
 void setupGFSunInverter() {

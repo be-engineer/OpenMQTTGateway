@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
   This gateway enables to:
@@ -80,8 +80,8 @@ bool _2GtoMQTT() {
   // Get the memory locations of unread SMS messages.
   unreadSMSNum = A6l.getUnreadSMSLocs(unreadSMSLocs, 512);
   Log.trace(F("Creating SMS  buffer" CR));
-  StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-  JsonObject SMSdata = jsonBuffer.to<JsonObject>();
+  StaticJsonDocument<JSON_MSG_BUFFER> SMSdataBuffer;
+  JsonObject SMSdata = SMSdataBuffer.to<JsonObject>();
   for (int i = 0; i < unreadSMSNum; i++) {
     Log.notice(F("New  message at index: %d" CR), unreadSMSNum);
     sms = A6l.readSMS(unreadSMSLocs[i]);
@@ -90,8 +90,8 @@ bool _2GtoMQTT() {
     SMSdata["phone"] = (const char*)sms.number.c_str();
     A6l.deleteSMS(unreadSMSLocs[i]); // we delete the SMS received
     Log.trace(F("Adv data 2GtoMQTT" CR));
-    pub(subject2GtoMQTT, SMSdata);
-    return true;
+    SMSdata["origin"] = subject2GtoMQTT;
+    return handleJsonEnqueue(SMSdata);
   }
   return false;
 }

@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
  
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
    
    This is the Climate Addon:
@@ -13,12 +13,12 @@
    Connection Schemata:
    --------------------
 
-   AHT10 ------> Arduino Uno ----------> ESP8266
+   AHT10 ------> ESP8266
    ==============================================
-   Vcc ---------> 5V -------------------> 3v3 (3V)
-   GND ---------> GND ------------------> GND
-   SCL ---------> Pin A5 ---------------> D1
-   SDA ---------> Pin A4 ---------------> D2
+   Vcc ---------> 3v3 (3V)
+   GND ---------> GND
+   SCL ---------> D1
+   SDA ---------> D2
    
     This file is part of OpenMQTTGateway.
     
@@ -86,8 +86,8 @@ void MeasureAHTTempHum() {
       Log.error(F("Failed to read from sensor AHTx0!" CR));
     } else {
       Log.notice(F("Creating AHTx0 buffer" CR));
-      StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-      JsonObject AHTx0data = jsonBuffer.to<JsonObject>();
+      StaticJsonDocument<JSON_MSG_BUFFER> AHTx0dataBuffer;
+      JsonObject AHTx0data = AHTx0dataBuffer.to<JsonObject>();
       // Generate Temperature in degrees C
       if (ahtTempC.temperature != persisted_aht_tempc || AHTx0_always) {
         float ahtTempF = convertTemp_CtoF(ahtTempC.temperature);
@@ -103,10 +103,8 @@ void MeasureAHTTempHum() {
       } else {
         Log.notice(F("Same Humidity. Don't send it" CR));
       }
-
-      if (AHTx0data.size() > 0) {
-        pub(AHTTOPIC, AHTx0data);
-      }
+      AHTx0data["origin"] = AHTTOPIC;
+      handleJsonEnqueue(AHTx0data);
     }
     persisted_aht_tempc = ahtTempC.temperature;
     persisted_aht_hum = ahtHum.relative_humidity;

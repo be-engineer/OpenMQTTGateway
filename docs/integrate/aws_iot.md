@@ -4,21 +4,21 @@
 * From AWS console, search for IOT core
 * Create a Thing and name it, this name will be used as the OpenMQTTGateway name.
 
-![](../img/Integrate_AWS_IOT_Create_Thing.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Thing.png)
 
-![](../img/Integrate_AWS_IOT_Create_Thing2.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Thing2.png)
 
-![](../img/Integrate_AWS_IOT_Create_Thing3.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Thing3.png)
 
-![](../img/Integrate_AWS_IOT_Create_Thing4.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Thing4.png)
 
 ## Create a policy
 
-![](../img/Integrate_AWS_IOT_Create_Policy.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Policy.png)
 
-![](../img/Integrate_AWS_IOT_Create_Policy2.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Policy2.png)
 
-![](../img/Integrate_AWS_IOT_Create_Policy3.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Policy3.png)
 
 * Add this json code to the policy
 ```json
@@ -46,26 +46,26 @@
 
 * Create a new certificate
 
-![](../img/Integrate_AWS_IOT_Create_Certificate.png)
-![](../img/Integrate_AWS_IOT_Create_Certificate2.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Certificate.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Certificate2.png)
 
 * Download certificates and key
 
-![](../img/Integrate_AWS_IOT_Create_Certificate3.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Create_Certificate3.png)
 
 ## Attach Policy with certificate
 
-![](../img/Integrate_AWS_IOT_Attach_Policy.png)
-![](../img/Integrate_AWS_IOT_Attach_Policy2.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Attach_Policy.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Attach_Policy2.png)
 
 ## Activate certificate and attach it to Thing
 
-![](../img/Integrate_AWS_IOT_Attach_Thing.png)
-![](../img/Integrate_AWS_IOT_Attach_Thing2.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Attach_Thing.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Attach_Thing2.png)
 
 ## Find AWS EndPoint
 
-![](../img/Integrate_AWS_IOT_Find_Endpoint.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_Find_Endpoint.png)
 
 ## Gather the information for OpenMQTTGateway configuration
 
@@ -78,22 +78,11 @@ Now you should have the following information for the OpenMQTTGateway configurat
 
 ## Modify OpenMQTTGateway configuration
 
-With Arduino IDE, you can update the following field into User_config.h with the information gathered:
-* Gateway_Name
-* `MQTT_SERVER "xxxxxx.iot-eu-amazonaws.com"`
-* `MQTT_PORT "8883"`
-* `AWS_IOT true`
-* ss_server_cert with the root certificate
-* ss_client_cert with the client certificate
-* ss_client_key with the Client key
-* `MQTT_SECURE_SELF_SIGNED 1`
-* `MQTT_SECURE_DEFAULT true`
-
-With PlatformIO you can directly leverage the environment `esp32dev-ble-aws`
+With PlatformIO you can directly leverage the environment `esp32dev-ble-aws` as an example and modify it following your needs.
 
 ## Build and upload
 
-## Connect to a wifi Access point [see portal](../upload/portal)
+## Connect to a WiFi Access point [see portal](../upload/portal)
 Enter your credentials and verify that Secure connection is marked.
 
 ## Verify that you receive data in AWS
@@ -106,4 +95,4 @@ Enter your credentials and verify that Secure connection is marked.
 
 You should see messages coming.
 
-![](../img/Integrate_AWS_IOT_result_MQTT.png)
+![AWS tutorial step](../img/Integrate_AWS_IOT_result_MQTT.png)

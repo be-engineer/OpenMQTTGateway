@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
    This is the Light Meter Addon based on modules with a TSL2561:
@@ -12,13 +12,13 @@
    Connection Scheme:
    --------------------
 
-   TSL2561------> Arduino Uno ----------> ESP8266
+   TSL2561------> ESP8266
    ==============================================
-   Vcc ---------> 3.3V -----------------> 3.3V
-   GND ---------> GND ------------------> GND
-   SCL ---------> Pin A5 ---------------> D1
-   SDA ---------> Pin A4 ---------------> D2
-   ADD ---------> N/C (Not Connected) --> N/C (Not Connected)
+   Vcc ---------> 3.3V
+   GND ---------> GND
+   SCL ---------> D1
+   SDA ---------> D2
+   ADD ---------> N/C (Not Connected)
  
     Copyright: (c) Chris Broekema
   
@@ -90,8 +90,8 @@ void MeasureLightIntensityTSL2561() {
     timetsl2561 = millis();
 
     Log.trace(F("Creating TSL2561 buffer" CR));
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject TSL2561data = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> TSL2561dataBuffer;
+    JsonObject TSL2561data = TSL2561dataBuffer.to<JsonObject>();
 
     sensors_event_t event;
     tsl.getEvent(&event);
@@ -104,8 +104,8 @@ void MeasureLightIntensityTSL2561() {
         TSL2561data["lux"] = (float)event.light;
         TSL2561data["ftcd"] = (float)(event.light) / 10.764;
         TSL2561data["wattsm2"] = (float)(event.light) / 683.0;
-
-        pub(subjectTSL12561toMQTT, TSL2561data);
+        TSL2561data["origin"] = subjectTSL12561toMQTT;
+        handleJsonEnqueue(TSL2561data);
       } else {
         Log.trace(F("Same lux value, do not send" CR));
       }

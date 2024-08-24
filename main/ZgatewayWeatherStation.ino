@@ -1,7 +1,7 @@
 /*
   OpenMQTTGateway  - ESP8266 or Arduino program for home automation
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
 
   This gateway enables to:
@@ -30,17 +30,13 @@
 WeatherStationDataRx wsdr(RF_WS_RECEIVER_GPIO, true);
 
 void PairedDeviceAdded(byte newID) {
-#  if defined(ESP8266) || defined(ESP32)
   Serial.printf("ZgatewayWeatherStation: New device paired %d\r\n", newID);
-#  else
-  Serial.print("ZgatewayWeatherStation: New device paired ");
-  Serial.println(newID, DEC);
-#  endif
-  StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-  JsonObject RFdata = jsonBuffer.to<JsonObject>();
+  StaticJsonDocument<JSON_MSG_BUFFER> RFdataBuffer;
+  JsonObject RFdata = RFdataBuffer.to<JsonObject>();
   RFdata["sensor"] = newID;
   RFdata["action"] = "paired";
-  pub(subjectRFtoMQTT, RFdata);
+  RFdata["origin"] = subjectRFtoMQTT;
+  handleJsonEnqueue(RFdata);
   wsdr.pair(NULL, PairedDeviceAdded);
 }
 
@@ -54,12 +50,13 @@ void setupWeatherStation() {
 void sendWindSpeedData(byte id, float wind_speed, byte battery_status) {
   unsigned long MQTTvalue = 10000 + round(wind_speed);
   if (!isAduplicateSignal(MQTTvalue)) { // conditions to avoid duplications of RF -->MQTT
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject RFdata = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> RFdataBuffer;
+    JsonObject RFdata = RFdataBuffer.to<JsonObject>();
     RFdata["sensor"] = id;
     RFdata["wind_speed"] = wind_speed;
     RFdata["battery"] = bitRead(battery_status, 0) == 0 ? "OK" : "Low";
-    pub(subjectRFtoMQTT, RFdata);
+    RFdata["origin"] = subjectRFtoMQTT;
+    handleJsonEnqueue(RFdata);
     Log.trace(F("Store wind speed val: %lu" CR), MQTTvalue);
     storeSignalValue(MQTTvalue);
   }
@@ -68,12 +65,13 @@ void sendWindSpeedData(byte id, float wind_speed, byte battery_status) {
 void sendRainData(byte id, float rain_volume, byte battery_status) {
   unsigned long MQTTvalue = 11000 + round(rain_volume * 10.0);
   if (!isAduplicateSignal(MQTTvalue)) { // conditions to avoid duplications of RF -->MQTT
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject RFdata = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> RFdataBuffer;
+    JsonObject RFdata = RFdataBuffer.to<JsonObject>();
     RFdata["sensor"] = id;
     RFdata["rain_volume"] = rain_volume;
     RFdata["battery"] = bitRead(battery_status, 1) == 0 ? "OK" : "Low";
-    pub(subjectRFtoMQTT, RFdata);
+    RFdata["origin"] = subjectRFtoMQTT;
+    handleJsonEnqueue(RFdata);
     Log.trace(F("Store rain_volume: %lu" CR), MQTTvalue);
     storeSignalValue(MQTTvalue);
   }
@@ -82,13 +80,14 @@ void sendRainData(byte id, float rain_volume, byte battery_status) {
 void sendWindData(byte id, int wind_direction, float wind_gust, byte battery_status) {
   unsigned long MQTTvalue = 20000 + round(wind_gust * 10.0) + wind_direction;
   if (!isAduplicateSignal(MQTTvalue)) { // conditions to avoid duplications of RF -->MQTT
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject RFdata = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> RFdataBuffer;
+    JsonObject RFdata = RFdataBuffer.to<JsonObject>();
     RFdata["sensor"] = id;
     RFdata["wind_direction"] = wind_direction;
     RFdata["wind_gust"] = wind_gust;
     RFdata["battery"] = bitRead(battery_status, 0) == 0 ? "OK" : "Low";
-    pub(subjectRFtoMQTT, RFdata);
+    RFdata["origin"] = subjectRFtoMQTT;
+    handleJsonEnqueue(RFdata);
     Log.trace(F("Store wind data val: %lu" CR), MQTTvalue);
     storeSignalValue(MQTTvalue);
   }
@@ -97,14 +96,15 @@ void sendWindData(byte id, int wind_direction, float wind_gust, byte battery_sta
 void sendTemperatureData(byte id, float temperature, int humidity, byte battery_status) {
   unsigned long MQTTvalue = 40000 + abs(round(temperature * 100.0)) + humidity;
   if (!isAduplicateSignal(MQTTvalue)) { // conditions to avoid duplications of RF -->MQTT
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject RFdata = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> RFdataBuffer;
+    JsonObject RFdata = RFdataBuffer.to<JsonObject>();
     RFdata["sensor"] = id;
     RFdata["tempc"] = temperature;
     RFdata["tempf"] = wsdr.convertCtoF(temperature);
     RFdata["humidity"] = humidity;
     RFdata["battery"] = bitRead(battery_status, 0) == 0 ? "OK" : "Low";
-    pub(subjectRFtoMQTT, RFdata);
+    RFdata["origin"] = subjectRFtoMQTT;
+    handleJsonEnqueue(RFdata);
     Log.trace(F("Store temp val: %lu" CR), MQTTvalue);
     storeSignalValue(MQTTvalue);
   }

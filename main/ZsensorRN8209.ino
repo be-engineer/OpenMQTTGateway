@@ -1,7 +1,7 @@
 /*  
   OpenMQTTGateway Addon  - ESP8266, ESP32 or Arduino program for home automation 
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
     RN8209 reading Addon
@@ -33,40 +33,73 @@
 
 extern "C" bool init_8209c_interface();
 
-StaticJsonDocument<JSON_MSG_BUFFER> doc;
+float voltage = 0;
+float current = 0;
+float power = 0;
+
+TaskHandle_t rn8209TaskHandle = nullptr;
+
+unsigned long PublishingTimerRN8209 = 0;
 
 void rn8209_loop(void* mode) {
-  if (!ProcessLock) {
-    uint32_t voltage;
-    int32_t current;
-    int32_t power;
-
-    while (1) {
-      rn8209c_read_voltage(&voltage);
-      uint8_t ret = rn8209c_read_emu_status();
-      if (ret) {
-        uint32_t temp_current = 0;
-        uint32_t temp_power = 0;
-        rn8209c_read_current(phase_A, &temp_current);
-        rn8209c_read_power(phase_A, &temp_power);
-        if (ret == 1) {
-          current = temp_current;
-          power = temp_power;
-        } else {
-          current = (int32_t)temp_current * (-1);
-          power = (int32_t)temp_power * (-1);
-        }
+  while (1) {
+    uint32_t temp_voltage = 0;
+    uint8_t retv = rn8209c_read_voltage(&temp_voltage);
+    uint8_t ret = rn8209c_read_emu_status();
+    uint8_t retc = 1;
+    uint8_t retp = 1;
+    static float previousCurrent = 0;
+    static float previousVoltage = 0;
+    if (ret) {
+      uint32_t temp_current = 0;
+      retc = rn8209c_read_current(phase_A, &temp_current);
+      if (ret == 1) {
+        current = temp_current;
+      } else {
+        current = (int32_t)temp_current * (-1);
       }
-
-      JsonObject data = doc.to<JsonObject>();
-      data["volt"] = (float)voltage / 1000.0;
-      data["current"] = (float)current / 10000.0;
-      data["power"] = (float)power / 10000.0;
-      pub(subjectRN8209toMQTT, data);
-      delay(TimeBetweenReadingRN8209);
+      if (retc == 0) {
+        current = current / 10000.0;
+        overLimitCurrent(current);
+      }
+      if (retv == 0) {
+        voltage = (float)temp_voltage / 1000.0;
+      }
     }
-  } else {
-    Log.trace(F("RN8209 reading canceled by processLock" CR));
+    unsigned long now = millis();
+    if ((now > (PublishingTimerRN8209 + TimeBetweenPublishingRN8209) ||
+         !PublishingTimerRN8209 ||
+         (abs(current - previousCurrent) > MinCurrentThreshold) || (abs(voltage - previousVoltage) > MinVoltageThreshold)) &&
+        !ProcessLock) {
+      StaticJsonDocument<JSON_MSG_BUFFER> RN8209dataBuffer;
+      JsonObject RN8209data = RN8209dataBuffer.to<JsonObject>();
+      if (retc == 0) {
+        previousCurrent = current;
+        RN8209data["current"] = round2(current);
+      }
+      uint32_t temp_power = 0;
+      retp = rn8209c_read_power(phase_A, &temp_power);
+      if (retv == 0) {
+        previousVoltage = voltage;
+        RN8209data["volt"] = round2(voltage);
+      }
+      if (ret == 1) {
+        power = temp_power;
+      } else {
+        power = (int32_t)temp_power * (-1);
+      }
+      if (retp == 0) {
+        power = power / 10000.0;
+        RN8209data["power"] = round2(power);
+      }
+      PublishingTimerRN8209 = now;
+      if (RN8209data) {
+        RN8209data["origin"] = subjectRN8209toMQTT;
+        handleJsonEnqueue(RN8209data, QueueSemaphoreTimeOutTask);
+      }
+    }
+    //esp_task_wdt_reset();
+    delay(TimeBetweenReadingRN8209);
   }
 }
 
@@ -77,7 +110,9 @@ void setupRN8209() {
   cal.EC = RN8209_EC;
   set_user_param(cal);
   init_8209c_interface();
-  xTaskCreate(rn8209_loop, "rn8209_loop", RN8209_TASK_STACK_SIZE, NULL, RN8209_TASK_PRIO, NULL);
+  xTaskCreate(rn8209_loop, "rn8209_loop", RN8209_TASK_STACK_SIZE_OVERRIDE, NULL, 10, &rn8209TaskHandle);
+  //esp_task_wdt_add(rn8209TaskHandle);
+  Log.trace(F("ZsensorRN8209 setup done " CR));
 }
 
 #endif // ZsensorRN8209

@@ -1,5 +1,5 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
    Act as a wifi or ethernet gateway between your 433mhz/infrared IR/BLE signal  and a MQTT broker 
    Send and receiving command by MQTT
@@ -101,7 +101,7 @@ void pubOneWire_HADiscovery() {
   // If zmqttDiscovery is enabled, create a sensor topic for each DS18b20 sensor found on the bus, using addr as uniqueID
 #  ifdef ZmqttDiscovery
   // If zmqtt discovery is enabled, create a sensor topic for each DS18b20 sensor found on the bus, using addr as uniqueID
-  if (disc) {
+  if (SYSConfig.discovery) {
     for (int index = 0; index < ds1820_count; index++) {
       createDiscovery("sensor",
                       (char*)(String(OW_TOPIC) + "/" + ds1820_addr[index]).c_str(),
@@ -140,8 +140,8 @@ void MeasureDS1820Temp() {
       Log.error(F("DS1820: Failed to identify any temperature sensors on 1-wire bus during setup!" CR));
     } else {
       Log.trace(F("DS1820: Reading temperature(s) from %d sensor(s)..." CR), ds1820_count);
-      StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-      JsonObject DS1820data = jsonBuffer.to<JsonObject>();
+      StaticJsonDocument<JSON_MSG_BUFFER> DS1820dataBuffer;
+      JsonObject DS1820data = DS1820dataBuffer.to<JsonObject>();
 
       for (uint8_t i = 0; i < ds1820_count; i++) {
         current_temp[i] = round(ds1820.getTempC(ds1820_devices[i]) * 10) / 10.0;
@@ -156,8 +156,11 @@ void MeasureDS1820Temp() {
             DS1820data["res"] = String(ds1820_resolution[i]) + String("bit");
             DS1820data["addr"] = ds1820_addr[i];
           }
-          pub((char*)(String(OW_TOPIC) + "/" + ds1820_addr[i]).c_str(), DS1820data);
-          delay(10);
+          String origin = String(OW_TOPIC) + "/" + ds1820_addr[i];
+          DS1820data["origin"] = origin;
+          handleJsonEnqueue(DS1820data);
+          if (SYSConfig.powerMode > 0)
+            ready_to_sleep = true;
         } else {
           Log.trace(F("DS1820: Temperature for device %s didn't change, don't publish it." CR), (char*)ds1820_addr[i].c_str());
         }

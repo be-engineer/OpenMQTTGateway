@@ -1,4 +1,4 @@
-# RS232 gateway
+# Serial/RS232 gateway
 ## Compatible parts
 |Module|Purpose|Where to Buy|
 |-|-|-|
@@ -10,14 +10,10 @@ Any module using a MAX232 chip will work. Don't pay extra to get all the signals
 ## Pinout
 |Board| Receiver Pin| Emitter Pin|
 |-|:-:|:-:|
-|Arduino UNO|D2|D9|
 |ESP8266|D2|D4|
 |ESP32|27/**26**|14|
 
 Connect VCC on the module to 5V of your board, and the ground on the module to the ground of your board. your Transmit pin goes to TX and your Receive pin goes to RX. This may seem backwards, but the module is labeled as where it will be connected on the RS232 side of the module.
-
-## Arduino Hardware setup
-![RS232](../img/OpenMQTTgateway_Arduino_Addon_RS232.png)
 
 ## ESP8266 Hardware setup
 ![RS232](../img/OpenMQTTgateway_ESP8266_Addon_RS232.png)
@@ -26,4 +22,4 @@ Connect VCC on the module to 5V of your board, and the ground on the module to t
 ![RS232](../img/OpenMQTTgateway_ESP32_Addon_RS232.png)
 
 ## Credits
-RS232 Gateway Developed by DieKatzchen
+RS232 gateway Developed by DieKatzchen

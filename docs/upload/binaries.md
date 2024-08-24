@@ -15,7 +15,6 @@ https://www.espressif.com/en/products/hardware/esp32/resources
 * Choose ESP32 DownloadTool
 * Set the files and the address as below:
 ![Flash download tool](../img/OpenMQTTgateway_ESP32_binary_flash.png)
-And set the parameters used by Arduino IDE, we are able to upload to ESP32 a binary file containing OpenMQTTGateway.
 * Set the config as above
 * Connect your ESP32 board and select the COM port 
 * Click on erase if it is your first upload
@@ -73,7 +72,7 @@ If you want to upload the ready-to-go binary from Linux (or any other OS where y
 https://github.com/marcelstoer/nodemcu-pyflasher/releases
 * Execute `NodeMCU-PyFlasher`
 * Set the files and parameters as below:
-![](../img/OpenMQTTgateway_NodeMCU_PyFlasher.png)
+![NodeMCU Py Flasher](../img/OpenMQTTgateway_NodeMCU_PyFlasher.png)
 * Connect your board and select the COM port 
 * Click on *FlashNodeMCU*
 The upload details appears.

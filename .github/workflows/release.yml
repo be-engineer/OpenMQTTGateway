@@ -19,7 +19,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install platformio
       - name: Set version tag from git
-        run: sed -i "s/version_tag/${GITHUB_REF#refs/tags/}/g" main/User_config.h
+        run: sed -i "s/version_tag/${GITHUB_REF#refs/tags/}/g" main/User_config.h scripts/latest_version.json
+      - name: Extract ESP32 platform version from platformio.ini
+        run: |
+          ESP32_VERSION=$(grep 'esp32_platform\s*=' platformio.ini | cut -d'@' -f2 | tr -d '[:space:]')
+          echo "ESP32_PLATFORM_VERSION=${ESP32_VERSION}" >> $GITHUB_ENV
       - name: Run PlatformIO
         run: platformio run
       - name: Prepare Release Assets
@@ -39,4 +43,5 @@ jobs:
           release-url: ${{ steps.release-id.outputs.upload_url }}
           allow-overwrite: true
   call-workflow-passing-data:
+    needs: build-upload
     uses: ./.github/workflows/manual_docs.yml

@@ -1,7 +1,7 @@
 /*
   OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
 
    This is a Temperature Addon:
@@ -13,12 +13,12 @@
    Connection Schemata:
    --------------------
 
-   LM75 ------> Arduino Uno ----------> ESP8266
+   LM75 ------> ESP8266
    ==============================================
-   Vcc ---------> 5V -------------------> Vu (5V)
-   GND ---------> GND ------------------> GND
-   SCL ---------> Pin A5 ---------------> D1
-   SDA ---------> Pin A4 ---------------> D2
+   Vcc ---------> Vu (5V)
+   GND ---------> GND
+   SCL ---------> D1
+   SDA ---------> D2
 
     This file is part of OpenMQTTGateway.
 
@@ -80,14 +80,15 @@ void MeasureTemp() {
       Log.error(F("Failed to read from sensor HLM75!" CR));
     } else {
       Log.notice(F("Creating LM75 buffer" CR));
-      StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-      JsonObject LM75data = jsonBuffer.to<JsonObject>();
+      StaticJsonDocument<JSON_MSG_BUFFER> LM75dataBuffer;
+      JsonObject LM75data = LM75dataBuffer.to<JsonObject>();
       // Generate Temperature in degrees C
       if (lm75TempC != persisted_lm75_tempc || lm75_always) {
         float lm75TempF = (lm75TempC * 1.8) + 32;
         LM75data["tempc"] = (float)lm75TempC;
         LM75data["tempf"] = (float)lm75TempF;
-        pub(LM75TOPIC, LM75data);
+        LM75data["origin"] = LM75TOPIC;
+        handleJsonEnqueue(LM75data);
       } else {
         Log.notice(F("Same Temp. Don't send it" CR));
       }

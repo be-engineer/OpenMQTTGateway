@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway Addon  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
  
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
    
    This is the Climate Addon:
@@ -13,12 +13,12 @@
    Connection Schemata:
    --------------------
 
-   HTU21 ------> Arduino Uno ----------> ESP8266
-   ==============================================
-   Vcc ---------> 5V -------------------> Vu (5V)
-   GND ---------> GND ------------------> GND
-   SCL ---------> Pin A5 ---------------> D1
-   SDA ---------> Pin A4 ---------------> D2
+   HTU21 ------> ESP8266
+   ======================
+   Vcc ---------> Vu (5V)
+   GND ---------> GND
+   SCL ---------> D1
+   SDA ---------> D2
    
     This file is part of OpenMQTTGateway.
     
@@ -38,8 +38,8 @@
 #ifndef config_HTU21_h
 #define config_HTU21_h
 
-extern void setupHTU21();
-extern void HTU21toMQTT();
+extern void setupZsensorHTU21();
+extern void MeasureTempHum();
 
 #define htu21_always            true // if false when the current value of the parameter is the same as previous one don't send it by MQTT
 #define TimeBetweenReadinghtu21 30000

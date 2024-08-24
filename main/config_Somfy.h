@@ -1,6 +1,6 @@
 /*  
-  OpenMQTTGateway  - ESP8266 or Arduino program for home automation 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
   This actor enables to:
@@ -38,8 +38,5 @@ const uint32_t somfyRemotes[SOMFY_REMOTE_NUM] = {0x5184c8};
 
 /*-------------DEFINE YOUR MQTT PARAMETERS BELOW----------------*/
 #define subjectMQTTtoSomfy "/commands/MQTTtoSomfy"
-
-/*-------------------INTERNAL DEFINITIONS----------------------*/
-#define CC1101_FREQUENCY_SOMFY 433.42
 
 #endif

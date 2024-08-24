@@ -1,5 +1,5 @@
 /*  
-  OpenMQTTGateway  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
    This files enables you to set your parameters for the FASTLED actuator 
   
@@ -24,6 +24,10 @@
 #ifndef config_FASTLED_h
 #define config_FASTLED_h
 
+extern void setupFASTLED();
+extern void FASTLEDLoop();
+extern void MQTTtoFASTLED(char*, char*);
+extern void MQTTtoFASTLED(char*, JsonObject&);
 /*-------------------FASTLED topics & parameters----------------------*/
 //FASTLED MQTT Subjects
 #define subjectMQTTtoFASTLED              "/commands/MQTTtoFASTLED"
@@ -33,17 +37,19 @@
 #define subjectGTWFASTLEDtoMQTT           "/FASTLEDtoMQTT" //same color on all LEDs in #RRGGBB
 
 // How many leds in your strip?
-#define FASTLED_NUM_LEDS 16
+#ifndef FASTLED_NUM_LEDS
+#  define FASTLED_NUM_LEDS 16
+#endif
 
 // Uncomment/edit one of the following lines for your LEDs arrangement.
-
+#ifndef FASTLED_TYPE
 //#define FASTLED_TYPE TM1803
 //#define FASTLED_TYPE TM1804
 //#define FASTLED_TYPE TM1809
 //#define FASTLED_TYPE WS2811
 //#define FASTLED_TYPE WS2812
 //#define FASTLED_TYPE WS2812B
-#define FASTLED_TYPE NEOPIXEL
+#  define FASTLED_TYPE NEOPIXEL
 //#define FASTLED_TYPE APA104
 //#define FASTLED_TYPE UCS1903
 //#define FASTLED_TYPE UCS1903B
@@ -62,6 +68,7 @@
 //#define FASTLED_TYPE P9813, DATA_GPIO, CLOCK_GPIO, RGB>(leds, NUM_LEDS);
 //#define FASTLED_TYPE APA102, DATA_GPIO, CLOCK_GPIO, RGB>(leds, NUM_LEDS);
 //#define FASTLED_TYPE DOTSTAR, DATA_GPIO, CLOCK_GPIO, RGB>(leds, NUM_LEDS);
+#endif
 
 // For led chips like Neopixels, which have a data line, ground, and power, you just
 // need to define DATA_GPIO.  For led chipsets that are SPI based (four wires - data, clock,
@@ -76,11 +83,19 @@
 #  define FASTLED_DATA_GPIO D2 // only D2 works by me
 //#define FASTLED_CLOCK_GPIO 13
 #elif ESP32
-#  define FASTLED_DATA_GPIO  16
-#  define FASTLED_CLOCK_GPIO 13
+#  ifndef FASTLED_DATA_GPIO
+#    define FASTLED_DATA_GPIO 16
+#  endif
+#  ifndef FASTLED_CLOCK_GPIO
+#    define FASTLED_CLOCK_GPIO 13
+#  endif
 #else
-#  define FASTLED_DATA_GPIO  10
-#  define FASTLED_CLOCK_GPIO 13
+#  ifndef FASTLED_DATA_GPIO
+#    define FASTLED_DATA_GPIO 10
+#  endif
+#  ifndef FASTLED_CLOCK_GPIO
+#    define FASTLED_CLOCK_GPIO 13
+#  endif
 #endif
 
 #endif

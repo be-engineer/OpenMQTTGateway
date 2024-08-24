@@ -7,15 +7,12 @@ So as to use the autodiscovery function you need to have:
 * The Jinga transformation addon installed
 * The Json transformation addon installed
 
-You need to set `OpenHABAutoDiscovery` to true into `config_mqttDiscovery.h`
-`#define OpenHABDiscovery true`
-
 ::: tip
 If you are connecting to BLE devices it is highly recommended to set `filterConnectable` to `true` in [BT configuration](../use/ble.md#advanced-filter-out-connectable-devices). Otherwise you may encounter incomplete data.
 :::
 
 The things will appear in the inbox of the paperUI, add them and links the channels. You should see them into the control panel for further usage.
-![](../img/OpenMQTTgateway_OpenHAB_Control.png)
+![OpenHAB integration](../img/OpenMQTTgateway_OpenHAB_Control.png)
 
 ## MQTT 2 manual setup >=Openhab2.4
 You should have an MQTT broker installed (either mosquitto or the OpenHAB2 embedded one)

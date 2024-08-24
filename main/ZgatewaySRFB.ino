@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
   This gateway enables to:
@@ -54,7 +54,7 @@ void _rfbSend(byte* message) {
 
 void _rfbSend(byte* message, int times) {
   char buffer[RF_MESSAGE_SIZE];
-  _rfbToChar(message, buffer);
+  _rawToHex(message, buffer, RF_MESSAGE_SIZE);
   Log.notice(F("[RFBRIDGE] Sending MESSAGE" CR));
 
   for (int i = 0; i < times; i++) {
@@ -99,11 +99,11 @@ void _rfbDecode() {
   char buffer[RF_MESSAGE_SIZE * 2 + 1] = {0};
 
   if (action == RF_CODE_RFIN) {
-    _rfbToChar(&_uartbuf[1], buffer);
+    _rawToHex(&_uartbuf[1], buffer, RF_MESSAGE_SIZE);
 
     Log.trace(F("Creating SRFB buffer" CR));
-    StaticJsonDocument<JSON_MSG_BUFFER> jsonBuffer;
-    JsonObject SRFBdata = jsonBuffer.to<JsonObject>();
+    StaticJsonDocument<JSON_MSG_BUFFER> SRFBdataBuffer;
+    JsonObject SRFBdata = SRFBdataBuffer.to<JsonObject>();
     SRFBdata["raw"] = String(buffer).substring(0, 18);
 
     int val_Tsyn = (int)(int)value_from_hex_data(buffer, 0, 4, false, false);
@@ -120,12 +120,14 @@ void _rfbDecode() {
 
     if (!isAduplicateSignal(MQTTvalue) && MQTTvalue != 0) { // conditions to avoid duplications of RF -->MQTT
       Log.trace(F("Adv data SRFBtoMQTT" CR));
-      pub(subjectSRFBtoMQTT, SRFBdata);
+      SRFBdata["origin"] = subjectSRFBtoMQTT;
+      handleJsonEnqueue(SRFBdata);
       Log.trace(F("Store val: %lu" CR), MQTTvalue);
       storeSignalValue(MQTTvalue);
       if (repeatSRFBwMQTT) {
         Log.trace(F("Publish SRFB for rpt" CR));
-        pub(subjectMQTTtoSRFB, SRFBdata);
+        SRFBdata["origin"] = subjectMQTTtoSRFB;
+        handleJsonEnqueue(SRFBdata);
       }
     }
     _rfbAck();
@@ -140,30 +142,6 @@ void _rfbAck() {
   Serial.write(RF_CODE_STOP);
   Serial.flush();
   Serial.println();
-}
-
-/*
-From an hexa char array ("A220EE...") to a byte array (half the size)
- */
-bool _rfbToArray(const char* in, byte* out) {
-  if (strlen(in) != RF_MESSAGE_SIZE * 2)
-    return false;
-  char tmp[3] = {0};
-  for (unsigned char p = 0; p < RF_MESSAGE_SIZE; p++) {
-    memcpy(tmp, &in[p * 2], 2);
-    out[p] = strtol(tmp, NULL, 16);
-  }
-  return true;
-}
-
-/*
-From a byte array to an hexa char array ("A220EE...", double the size)
- */
-bool _rfbToChar(byte* in, char* out) {
-  for (unsigned char p = 0; p < RF_MESSAGE_SIZE; p++) {
-    sprintf_P(&out[p * 2], PSTR("%02X" CR), in[p]);
-  }
-  return true;
 }
 
 #  if simpleReceiving
@@ -255,7 +233,7 @@ void MQTTtoSRFB(char* topicOri, char* datacallback) {
       valueRPT = 1;
 
     byte message_b[RF_MESSAGE_SIZE];
-    _rfbToArray(datacallback, message_b);
+    _hexToRaw(datacallback, message_b, RF_MESSAGE_SIZE);
     _rfbSend(message_b, valueRPT);
     // Acknowledgement to the GTWRF topic
     pub(subjectGTWSRFBtoMQTT, datacallback); // we acknowledge the sending by publishing the value to an acknowledgement topic, for the moment even if it is a signal repetition we acknowledge also
@@ -272,7 +250,7 @@ void MQTTtoSRFB(char* topicOri, JsonObject& SRFBdata) {
     if (raw) { // send raw in priority when defined in the json
       Log.trace(F("MQTTtoSRFB raw ok" CR));
       byte message_b[RF_MESSAGE_SIZE];
-      _rfbToArray(raw, message_b);
+      _hexToRaw(raw, message_b, RF_MESSAGE_SIZE);
       _rfbSend(message_b, valueRPT);
     } else {
       unsigned long data = SRFBdata["value"];
@@ -322,7 +300,6 @@ void MQTTtoSRFB(char* topicOri, JsonObject& SRFBdata) {
 
         Log.notice(F("MQTTtoSRFB OK" CR));
         _rfbSend(message_b, valueRPT);
-        // Acknowledgement to the GTWRF topic
         pub(subjectGTWSRFBtoMQTT, SRFBdata); // we acknowledge the sending by publishing the value to an acknowledgement topic, for the moment even if it is a signal repetition we acknowledge also
       } else {
         Log.error(F("MQTTtoSRFB error decoding value" CR));

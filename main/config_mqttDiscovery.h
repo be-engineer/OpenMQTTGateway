@@ -1,7 +1,7 @@
 /*
   OpenMQTTGateway  - ESP8266 or Arduino program for home automation
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
 
    This files enables to set your parameter for the Home assistant mqtt Discovery
@@ -88,7 +88,7 @@ extern void createDiscovery(const char* sensor_type,
                             int off_delay,
                             const char* payload_available, const char* payload_not_available, bool gateway_entity, const char* command_topic,
                             const char* device_name, const char* device_manufacturer, const char* device_model, const char* device_mac, bool retainCmd,
-                            const char* state_class, const char* state_off = nullptr, const char* state_on = nullptr);
+                            const char* state_class, const char* state_off = nullptr, const char* state_on = nullptr, const char* enum_options = nullptr, const char* command_template = nullptr);
 
 /**
  * @brief Create a message for Discovery Device Trigger. For HA @see https://www.home-assistant.io/integrations/device_trigger.mqtt/
@@ -112,17 +112,30 @@ void announceDeviceTrigger(bool use_gateway_info,
                            char* device_model,
                            char* device_mac);
 
-#ifndef discovery_Topic
-#  define discovery_Topic "homeassistant"
+#ifdef discovery_Topic //Deprecated - use discovery_Prefix instead
+#  define discovery_Prefix "homeassistant"
 #endif
+#ifndef discovery_Prefix
+#  define discovery_Prefix "homeassistant"
+#endif
+char discovery_prefix[parameters_size + 1] = discovery_Prefix;
+
 // discovery_republish_on_reconnect false to publish discovery topics over MQTT only with first connect
 // discovery_republish_on_reconnect true to always republish discovery topics over MQTT when connection is re-established
 #ifndef discovery_republish_on_reconnect
 #  define discovery_republish_on_reconnect false
 #endif
 
+#ifndef DiscoveryAutoOffTimer
+#  define DiscoveryAutoOffTimer 1800000 // Timer (ms) that trigger auto discovery to off after activation, the goal is to avoid the discovery of entities that are not expected
+#endif
+
 #ifndef GATEWAY_MANUFACTURER
 #  define GATEWAY_MANUFACTURER "OMG_community"
+#endif
+
+#ifndef ForceDeviceName
+#  define ForceDeviceName false // Set to true to force the device name to be from the name of the device and not the model
 #endif
 
 /*-------------- Auto discovery macros-----------------*/
@@ -131,77 +144,44 @@ void announceDeviceTrigger(bool use_gateway_info,
 #  define OpenHABDiscovery false
 #endif
 
-#if OpenHABDiscovery // OpenHAB autodiscovery value key definition (is defined command is not supported by OpenHAB)
-#  define jsonBatt     "{{ value_json.batt }}"
-#  define jsonLux      "{{ value_json.lux }}"
-#  define jsonPres     "{{ value_json.pres }}"
-#  define jsonFer      "{{ value_json.fer }}"
-#  define jsonFor      "{{ value_json.for }}"
-#  define jsonMoi      "{{ value_json.moi }}"
-#  define jsonHum      "{{ value_json.hum }}"
-#  define jsonStep     "{{ value_json.steps }}"
-#  define jsonWeight   "{{ value_json.weight }}"
-#  define jsonPresence "{{ value_json.presence }}"
-#  define jsonAltim    "{{ value_json.altim }}"
-#  define jsonAltif    "{{ value_json.altift }}"
-#  define jsonTempc    "{{ value_json.tempc }}"
-#  define jsonTempc2   "{{ value_json.tempc2 }}"
-#  define jsonTempc3   "{{ value_json.tempc3 }}"
-#  define jsonTempc4   "{{ value_json.tempc4 }}"
-#  define jsonTempf    "{{ value_json.tempf }}"
-#  define jsonMsg      "{{ value_json.message }}"
-#  define jsonVal      "{{ value_json.value }}"
-#  define jsonVolt     "{{ value_json.volt }}"
-#  define jsonCurrent  "{{ value_json.current }}"
-#  define jsonPower    "{{ value_json.power }}"
-#  define jsonEnergy   "{{ value_json.energy }}"
-#  define jsonGpio     "{{ value_json.gpio }}"
-#  define jsonFtcd     "{{ value_json.ftcd }}"
-#  define jsonWm2      "{{ value_json.wattsm2 }}"
-#  define jsonAdc      "{{ value_json.adc }}"
-#  define jsonPa       "{{ float(value_json.pa) * 0.01 }}"
-#  define jsonId       "{{ value_json.id }}"
-#  define jsonAddress  "{{ value_json.address }}"
-#  define jsonOpen     "{{ value_json.open }}"
-#  define jsonTime     "{{ value_json.time }}"
-#  define jsonCount    "{{ value_json.count }}"
-#  define jsonAlarm    "{{ value_json.alarm }}"
-#else // Home assistant autodiscovery value key definition
-#  define jsonBatt     "{{ value_json.batt | is_defined }}"
-#  define jsonLux      "{{ value_json.lux | is_defined }}"
-#  define jsonPres     "{{ value_json.pres | is_defined }}"
-#  define jsonFer      "{{ value_json.fer | is_defined }}"
-#  define jsonFor      "{{ value_json.for | is_defined }}"
-#  define jsonMoi      "{{ value_json.moi | is_defined }}"
-#  define jsonHum      "{{ value_json.hum | is_defined }}"
-#  define jsonStep     "{{ value_json.steps | is_defined }}"
-#  define jsonWeight   "{{ value_json.weight | is_defined }}"
-#  define jsonPresence "{{ value_json.presence | is_defined }}"
-#  define jsonAltim    "{{ value_json.altim | is_defined }}"
-#  define jsonAltif    "{{ value_json.altift | is_defined }}"
-#  define jsonTempc    "{{ value_json.tempc | is_defined }}"
-#  define jsonTempc2   "{{ value_json.tempc2 | is_defined }}"
-#  define jsonTempc3   "{{ value_json.tempc3 | is_defined }}"
-#  define jsonTempc4   "{{ value_json.tempc4 | is_defined }}"
-#  define jsonTempf    "{{ value_json.tempf | is_defined }}"
-#  define jsonMsg      "{{ value_json.message | is_defined }}"
-#  define jsonVal      "{{ value_json.value | is_defined }}"
-#  define jsonVolt     "{{ value_json.volt | is_defined }}"
-#  define jsonCurrent  "{{ value_json.current | is_defined }}"
-#  define jsonPower    "{{ value_json.power | is_defined }}"
-#  define jsonEnergy   "{{ value_json.energy | is_defined }}"
-#  define jsonGpio     "{{ value_json.gpio | is_defined }}"
-#  define jsonFtcd     "{{ value_json.ftcd | is_defined }}"
-#  define jsonWm2      "{{ value_json.wattsm2 | is_defined }}"
-#  define jsonAdc      "{{ value_json.adc | is_defined }}"
-#  define jsonPa       "{{ float(value_json.pa) * 0.01 | is_defined }}"
-#  define jsonId       "{{ value_json.id | is_defined }}"
-#  define jsonAddress  "{{ value_json.address | is_defined }}"
-#  define jsonOpen     "{{ value_json.open | is_defined }}"
-#  define jsonTime     "{{ value_json.time | is_defined }}"
-#  define jsonCount    "{{ value_json.count | is_defined }}"
-#  define jsonAlarm    "{{ value_json.alarm | is_defined }}"
-#endif
+// Home assistant autodiscovery value key definition
+#define jsonBatt        "{{ value_json.batt | is_defined }}"
+#define jsonLux         "{{ value_json.lux | is_defined }}"
+#define jsonPres        "{{ value_json.pres | is_defined }}"
+#define jsonFer         "{{ value_json.fer | is_defined }}"
+#define jsonFor         "{{ value_json.for | is_defined }}"
+#define jsonMoi         "{{ value_json.moi | is_defined }}"
+#define jsonHum         "{{ value_json.hum | is_defined }}"
+#define jsonStep        "{{ value_json.steps | is_defined }}"
+#define jsonWeight      "{{ value_json.weight | is_defined }}"
+#define jsonPresence    "{{ value_json.presence | is_defined }}"
+#define jsonAltim       "{{ value_json.altim | is_defined }}"
+#define jsonAltif       "{{ value_json.altift | is_defined }}"
+#define jsonTempc       "{{ value_json.tempc | is_defined }}"
+#define jsonTempc2      "{{ value_json.tempc2 | is_defined }}"
+#define jsonTempc3      "{{ value_json.tempc3 | is_defined }}"
+#define jsonTempc4      "{{ value_json.tempc4 | is_defined }}"
+#define jsonTempf       "{{ value_json.tempf | is_defined }}"
+#define jsonMsg         "{{ value_json.message | is_defined }}"
+#define jsonVal         "{{ value_json.value | is_defined }}"
+#define jsonVolt        "{{ value_json.volt | is_defined }}"
+#define jsonCurrent     "{{ value_json.current | is_defined }}"
+#define jsonPower       "{{ value_json.power | is_defined }}"
+#define jsonEnergy      "{{ value_json.energy | is_defined }}"
+#define jsonGpio        "{{ value_json.gpio | is_defined }}"
+#define jsonFtcd        "{{ value_json.ftcd | is_defined }}"
+#define jsonWm2         "{{ value_json.wattsm2 | is_defined }}"
+#define jsonAdc         "{{ value_json.adc | is_defined }}"
+#define jsonPa          "{{ float(value_json.pa) * 0.01 | is_defined }}"
+#define jsonId          "{{ value_json.id | is_defined }}"
+#define jsonAddress     "{{ value_json.address | is_defined }}"
+#define jsonOpen        "{{ value_json.open | is_defined }}"
+#define jsonTime        "{{ value_json.time | is_defined }}"
+#define jsonCount       "{{ value_json.count | is_defined }}"
+#define jsonAlarm       "{{ value_json.alarm | is_defined }}"
+#define jsonInuse       "{{ value_json.power | is_defined | float > 0 }}"
+#define jsonInuseRN8209 "{% if value_json.power > 0.02 -%} on {% else %} off {%- endif %}"
+#define jsonVoltBM2     "{% if value_json.uuid is not defined and value_json.volt is defined -%} {{value_json.volt}} {%- endif %}"
 
 #define stateClassNone            ""
 #define stateClassMeasurement     "measurement"
@@ -211,21 +191,41 @@ void announceDeviceTrigger(bool use_gateway_info,
 // From https://github.com/home-assistant/core/blob/d7ac4bd65379e11461c7ce0893d3533d8d8b8cbf/homeassistant/const.py#L225
 // List of classes available in Home Assistant
 const char* availableHASSClasses[] = {"battery",
-                                      "carbon_monoxide",
                                       "carbon_dioxide",
-                                      "pm10",
-                                      "pm25",
+                                      "carbon_monoxide",
+                                      "current",
+                                      "data_size",
+                                      "distance",
+                                      "door",
+                                      "duration",
+                                      "energy",
+                                      "enum",
+                                      "gas",
                                       "humidity",
                                       "illuminance",
+                                      "irradiance",
+                                      "lock",
+                                      "motion",
+                                      "moving",
+                                      "pm1",
+                                      "pm10",
+                                      "pm25",
+                                      "power",
+                                      "power_factor",
+                                      "precipitation",
+                                      "precipitation_intensity",
+                                      "pressure",
+                                      "problem",
+                                      "restart",
                                       "signal_strength",
+                                      "sound_pressure",
                                       "temperature",
                                       "timestamp",
-                                      "pressure",
-                                      "power",
-                                      "current",
-                                      "energy",
-                                      "power_factor",
-                                      "voltage"};
+                                      "voltage",
+                                      "water",
+                                      "weight",
+                                      "wind_speed",
+                                      "window"};
 
 // From https://github.com/home-assistant/core/blob/d7ac4bd65379e11461c7ce0893d3533d8d8b8cbf/homeassistant/const.py#L379
 // List of units available in Home Assistant
@@ -239,6 +239,7 @@ const char* availableHASSUnits[] = {"W",
                                     "°F",
                                     "ms",
                                     "s",
+                                    "min",
                                     "hPa",
                                     "L",
                                     "kg",
@@ -249,6 +250,7 @@ const char* availableHASSUnits[] = {"W",
                                     "m³",
                                     "mg/m³",
                                     "m/s²",
+                                    "mV",
                                     "lx",
                                     "Ω",
                                     "%",
@@ -265,4 +267,10 @@ const char* availableHASSUnits[] = {"W",
                                     "mm/h",
                                     "cm"};
 
+// Define the command used to update through OTA depending if we want to update from dev nightly or latest release
+#if DEVELOPMENTOTA
+#  define LATEST_OR_DEV "{\"version\":\"dev\"}"
+#else
+#  define LATEST_OR_DEV "{\"version\":\"latest\"}"
+#endif
 #endif

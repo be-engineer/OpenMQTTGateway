@@ -1,7 +1,7 @@
 /*  
-  OpenMQTTGateway  - ESP8266 or Arduino program for home automation 
+  Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a wifi or ethernet gateway between your 433mhz/infrared IR signal  and a MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
    Send and receiving command by MQTT
  
    This files enables to set your parameter for the RN8209 sensor
@@ -43,7 +43,21 @@ extern void RN8209toMQTT();
 #  define RN8209_EC 28250
 #endif
 
+#ifndef RN8209_TASK_STACK_SIZE_OVERRIDE
+#  define RN8209_TASK_STACK_SIZE_OVERRIDE 5500
+#endif
+
 #ifndef TimeBetweenReadingRN8209
-#  define TimeBetweenReadingRN8209 10000 // time between 2 RN8209 readings in ms
+#  define TimeBetweenReadingRN8209 500 // time between 2 RN8209 readings in ms
+#endif
+
+#ifndef TimeBetweenPublishingRN8209
+#  define TimeBetweenPublishingRN8209 60000 // time between 2 RN8209 publishing in ms
+#endif
+#ifndef MinCurrentThreshold
+#  define MinCurrentThreshold 0.1 // (A) Minimum current change that will trigger the publishing of the RN8209 measurements
+#endif
+#ifndef MinVoltageThreshold
+#  define MinVoltageThreshold 2 // (V) Minimum voltage change that will trigger the publishing of the RN8209 measurements
 #endif
 #endif
