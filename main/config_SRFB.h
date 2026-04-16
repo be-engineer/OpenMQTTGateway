@@ -27,10 +27,12 @@
 #ifndef config_SRFB_h
 #define config_SRFB_h
 
+#include "TheengsCommon.h"
+
 extern void setupSRFB();
-extern bool SRFBtoMQTT();
-extern void MQTTtoSRFB(char* topicOri, char* datacallback);
-extern void MQTTtoSRFB(char* topicOri, JsonObject& RFdata);
+extern bool SRFBtoX();
+extern void XtoSRFB(const char* topicOri, const char* datacallback);
+extern void XtoSRFB(const char* topicOri, JsonObject& RFdata);
 /*-------------------RF topics & parameters----------------------*/
 //433Mhz MQTT Subjects and keys
 #define subjectMQTTtoSRFB      "/commands/MQTTtoSRFB"

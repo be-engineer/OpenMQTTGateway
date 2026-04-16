@@ -24,11 +24,10 @@
 #ifndef config_Somfy_h
 #define config_Somfy_h
 
-#include <Arduino.h>
-#include <ArduinoJson.h>
+#include "TheengsCommon.h"
 
 extern void setupSomfy();
-extern void MQTTtoSomfy(char* topicOri, JsonObject& RFdata);
+extern void XtoSomfy(const char* topicOri, JsonObject& RFdata);
 /*----------------------------USER PARAMETERS-----------------------------*/
 #define EEPROM_ADDRESS_START 0
 #define SOMFY_REMOTE_NUM     1

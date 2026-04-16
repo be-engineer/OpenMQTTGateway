@@ -1,15 +1,15 @@
-/*  
+/*
   Theengs OpenMQTTGateway - We Unite Sensors in One Open-Source Interface
 
-   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker 
+   Act as a gateway between your 433mhz, infrared IR, BLE, LoRa signal and one interface like an MQTT broker
    Send and receiving command by MQTT
- 
+
    This files enables to set your parameter for the bluetooth low energy gateway (beacons detection)
-  
+
     Copyright: (c)Florian ROBERT
-  
+
     This file is part of OpenMQTTGateway.
-    
+
     OpenMQTTGateway is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
@@ -26,12 +26,12 @@
 #ifndef config_BT_h
 #define config_BT_h
 
+#include "TheengsCommon.h"
+
 extern void setupBT();
-extern bool BTtoMQTT();
-extern void MQTTtoBT(char* topicOri, JsonObject& RFdata);
-extern void pubMainCore(JsonObject& data);
+extern void XtoBT(const char* topicOri, JsonObject& RFdata);
 extern void launchBTDiscovery(bool overrideDiscovery);
-extern void stopProcessing();
+extern void stopProcessing(bool deinit);
 extern String stateBTMeasures(bool);
 
 #ifdef ESP32
@@ -42,6 +42,7 @@ extern String stateBTMeasures(bool);
 #define subjectBTtoMQTT    "/BTtoMQTT"
 #define subjectMQTTtoBTset "/commands/MQTTtoBT/config"
 #define subjectMQTTtoBT    "/commands/MQTTtoBT"
+#define subjectTrackerSync "internal/trackersync"
 // Uncomment to send undecoded device data to another gateway device for decoding
 // #define MQTTDecodeTopic    "undecoded"
 #ifndef UseExtDecoder
@@ -99,7 +100,10 @@ extern String stateBTMeasures(bool);
 #endif
 
 #ifndef BLEScanDuplicateCacheSize
-#  define BLEScanDuplicateCacheSize 200
+#  define BLEScanDuplicateCacheSize 100
+#endif
+#ifndef MaxBLEDevices
+#  define MaxBLEDevices 80
 #endif
 #ifndef TimeBtwRead
 #  define TimeBtwRead 55555 //define default time between 2 scans; in milliseconds
@@ -121,11 +125,21 @@ extern String stateBTMeasures(bool);
 #  define EnableBT true
 #endif
 
+#ifndef BLEDecoder
+#  define BLEDecoder true //true if we use the Theengs decoder
+#endif
+
+#if !BLEDecoder
+#  define UNKWNON_MODEL -1
+#else
+#  define UNKWNON_MODEL TheengsDecoder::BLE_ID_NUM::UNKNOWN_MODEL
+#endif
+
 #ifndef BLE_CNCT_TIMEOUT
 #  define BLE_CNCT_TIMEOUT 3000
 #endif
 
-unsigned long scanCount = 0;
+extern unsigned long scanCount;
 
 #ifndef pubBLEAdvData
 #  define pubBLEAdvData false // define true if you want to publish all advertisement data
@@ -133,6 +147,10 @@ unsigned long scanCount = 0;
 
 #ifndef useBeaconUuidForTopic
 #  define useBeaconUuidForTopic false // define true to use iBeacon UUID as topic, instead of sender (random) MAC address
+#endif
+
+#ifndef enableMultiGTWSync
+#  define enableMultiGTWSync true // //define true to use tracker and closest control devices sync across OpenMQTTGateway and Theengs Gateway gateways
 #endif
 
 /*--------------HOME ASSISTANT ROOM PRESENCE--------------*/
@@ -195,9 +213,8 @@ enum ble_val_type {
 };
 
 struct BLEAction {
-  std::string value;
-  char addr[18];
-  int addr_type;
+  NimBLEAttValue value;
+  NimBLEAddress addr;
   NimBLEUUID service;
   NimBLEUUID characteristic;
   bool write;

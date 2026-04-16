@@ -37,7 +37,7 @@
 #define config_MQ2_h
 
 extern void setupZsensorMQ2();
-extern void MQ2toMQTT();
+extern void MQ2toX();
 
 #ifndef MQ2SENSORADCPIN
 #  ifdef ESP32
@@ -61,8 +61,5 @@ extern void MQ2toMQTT();
 /*----------------------------USER PARAMETERS-----------------------------*/
 /*-------------DEFINE YOUR MQTT PARAMETERS BELOW----------------*/
 #define subjectMQ2toMQTT "/GAStoMQTT/mq2"
-
-//Time used to wait for an interval before resending measured values
-unsigned long timemq2 = 0;
 
 #endif

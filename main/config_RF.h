@@ -25,36 +25,31 @@
 */
 #ifndef config_RF_h
 #define config_RF_h
+#pragma once
 
-#include <Arduino.h>
-#include <ArduinoJson.h>
+#include <rf/RFConfiguration.h>
 
 #ifdef ZgatewayRF
-extern void setupRF();
-extern void RFtoMQTT();
-extern void MQTTtoRF(char* topicOri, char* datacallback);
-extern void MQTTtoRF(char* topicOri, JsonObject& RFdata);
+extern void RFtoX();
+extern void XtoRF(const char* topicOri, const char* datacallback);
+extern void XtoRF(const char* topicOri, JsonObject& RFdata);
 extern void disableRFReceive();
-extern void enableRFReceive();
+extern void enableRFReceive(float rfFrequency, int rfReceiverGPIO, int rfEmitterGPIO);
 #endif
 #ifdef ZgatewayRF2
-extern void RF2toMQTT();
-extern void MQTTtoRF2(char* topicOri, char* datacallback);
-extern void MQTTtoRF2(char* topicOri, JsonObject& RFdata);
+extern void RF2toX();
+extern void XtoRF2(const char* topicOri, const char* datacallback);
+extern void XtoRF2(const char* topicOri, JsonObject& RFdata);
 extern void disableRF2Receive();
 extern void enableRF2Receive();
 #endif
 #ifdef ZgatewayPilight
 extern void setupPilight();
-extern void PilighttoMQTT();
-extern void MQTTtoPilight(char* topicOri, char* datacallback);
-extern void MQTTtoPilight(char* topicOri, JsonObject& RFdata);
+extern void PilighttoX();
 extern void disablePilightReceive();
 extern void enablePilightReceive();
 #endif
 #ifdef ZgatewayRTL_433
-#  include <rtl_433_ESP.h>
-rtl_433_ESP rtl_433;
 
 extern void RTL_433Loop();
 extern void setupRTL_433();
@@ -125,8 +120,8 @@ const char parameters[51][4][24] = {
     {"temperature_F", "Temperature", "°F", "temperature"},
     {"time", "Timestamp", "", "timestamp"},
     {"unit", "Unit", "", ""},
-    {"uv", "UV", "UV level", ""},
-    {"uvi", "UVI", "UV index", ""},
+    {"uv", "UV value", "", ""},
+    {"uvi", "UV index", "", ""},
     {"wind_avg_km_h", "Wind average", "km/h", "wind_speed"},
     {"wind_avg_m_s", "Wind average", "m/s", "wind_speed"},
     {"wind_avg_mi_h", "Wind average", "mi/h", "wind_speed"},
@@ -137,47 +132,54 @@ const char parameters[51][4][24] = {
     {"wind_speed_m_s", "Wind speed", "m/s", "wind_speed"}};
 #  endif
 #  ifdef RTL_433_DISCOVERY_LOGGING
-#    define DISCOVERY_TRACE_LOG(...) Log.trace(__VA_ARGS__)
+#    define DISCOVERY_TRACE_LOG(...) THEENGS_LOG_TRACE(__VA_ARGS__)
 #  else
 #    define DISCOVERY_TRACE_LOG(...)
 #  endif
 #endif
+
+extern RFConfiguration iRFConfig;
+
 /*-------------------RF topics & parameters----------------------*/
 //433Mhz MQTT Subjects and keys
-#define subjectMQTTtoRF       "/commands/MQTTto433"
-#define subjectRFtoMQTT       "/433toMQTT"
-#define subjectcommonRFtoMQTT "/RFtoMQTT"
-#define subjectGTWRFtoMQTT    "/433toMQTT"
-#define RFprotocolKey         "433_" // protocol will be defined if a subject contains RFprotocolKey followed by a value of 1 digit
-#define RFbitsKey             "RFBITS_" // bits  will be defined if a subject contains RFbitsKey followed by a value of 2 digits
-#define repeatRFwMQTT         false // do we repeat a received signal by using MQTT with RF gateway
-#define RFpulselengthKey      "PLSL_" // pulselength will be defined if a subject contains RFprotocolKey followed by a value of 3 digits
+#define subjectMQTTtoRF              "/commands/MQTTto433"
+#define subjectRFtoMQTT              "/433toMQTT"
+#define subjectRFtoMQTTvalueAsATopic "/433toMQTT/#"
+#define subjectcommonRFtoMQTT        "/RFtoMQTT"
+#define subjectGTWRFtoMQTT           "/433toMQTT"
+#define RFprotocolKey                "433_" // protocol will be defined if a subject contains RFprotocolKey followed by a value of 1 digit
+#define RFbitsKey                    "RFBITS_" // bits  will be defined if a subject contains RFbitsKey followed by a value of 2 digits
+#define repeatRFwMQTT                false // do we repeat a received signal by using MQTT with RF gateway
+#define RFpulselengthKey             "PLSL_" // pulselength will be defined if a subject contains RFprotocolKey followed by a value of 3 digits
 // subject monitored to listen traffic processed by other gateways to store data and avoid ntuple
 #define subjectMultiGTWRF "+/+/433toMQTT"
 //RF number of signal repetition - Can be overridden by specifying "repeat" in a JSON message.
 #define RF_EMITTER_REPEAT  20
 #define RF2_EMITTER_REPEAT 2 // Actual repeats is 2^R, where R is the here configured amount
 //#define RF_DISABLE_TRANSMIT //Uncomment this line to disable RF transmissions. (RF Receive will work as normal.)
-#define RFmqttDiscovery true //uncomment this line so as to create a discovery switch for each RF signal received
+//#define RF_on_HAS_as_DeviceTrigger //uncomment this line so as to create a Home Assistant device trigger for each RF signal received
+#define RF_on_HAS_as_MQTTSensor //uncomment this line so as to create a Home Assistant MQTT sensor for each RF signal received
 
 /*-------------------RF2 topics & parameters----------------------*/
 //433Mhz newremoteswitch MQTT Subjects and keys
-#define subjectMQTTtoRF2    "/commands/MQTTtoRF2"
-#define subjectRF2toMQTT    "/RF2toMQTT"
-#define subjectGTWRF2toMQTT "/RF2toMQTT"
-#define RF2codeKey          "ADDRESS_" // code will be defined if a subject contains RF2codeKey followed by a value of 7 digits
-#define RF2periodKey        "PERIOD_" // period  will be defined if a subject contains RF2periodKey followed by a value of 3 digits
-#define RF2unitKey          "UNIT_" // number of your unit value  will be defined if a subject contains RF2unitKey followed by a value of 1-2 digits
-#define RF2groupKey         "GROUP_" // number of your group value  will be defined if a subject contains RF2groupKey followed by a value of 1 digit
-#define RF2dimKey           "DIM" // number of your dim value will be defined if a subject contains RF2dimKey and the payload contains the dim value as digits
+#define subjectMQTTtoRF2              "/commands/MQTTtoRF2"
+#define subjectRF2toMQTT              "/RF2toMQTT"
+#define subjectRF2toMQTTvalueAsATopic "/RF2toMQTT/#"
+#define subjectGTWRF2toMQTT           "/RF2toMQTT"
+#define RF2codeKey                    "ADDRESS_" // code will be defined if a subject contains RF2codeKey followed by a value of 7 digits
+#define RF2periodKey                  "PERIOD_" // period  will be defined if a subject contains RF2periodKey followed by a value of 3 digits
+#define RF2unitKey                    "UNIT_" // number of your unit value  will be defined if a subject contains RF2unitKey followed by a value of 1-2 digits
+#define RF2groupKey                   "GROUP_" // number of your group value  will be defined if a subject contains RF2groupKey followed by a value of 1 digit
+#define RF2dimKey                     "DIM" // number of your dim value will be defined if a subject contains RF2dimKey and the payload contains the dim value as digits
 
 /*-------------------ESPPiLight topics & parameters----------------------*/
 //433Mhz Pilight MQTT Subjects and keys
-#define subjectMQTTtoPilight         "/commands/MQTTtoPilight"
-#define subjectMQTTtoPilightProtocol "/commands/MQTTtoPilight/protocols"
-#define subjectPilighttoMQTT         "/PilighttoMQTT"
-#define subjectGTWPilighttoMQTT      "/PilighttoMQTT"
-#define repeatPilightwMQTT           false // do we repeat a received signal by using MQTT with Pilight gateway
+#define subjectMQTTtoPilight              "/commands/MQTTtoPilight"
+#define subjectMQTTtoPilightProtocol      "/commands/MQTTtoPilight/protocols"
+#define subjectPilighttoMQTT              "/PilighttoMQTT"
+#define subjectPilighttoMQTTvalueAsATopic "/PilighttoMQTT/#"
+#define subjectGTWPilighttoMQTT           "/PilighttoMQTT"
+#define repeatPilightwMQTT                false // do we repeat a received signal by using MQTT with Pilight gateway
 //#define Pilight_rawEnabled true   // enables Pilight RAW return - switchable via MQTT
 
 /*-------------------RTL_433 topics & parameters----------------------*/
@@ -188,7 +190,7 @@ const char parameters[51][4][24] = {
 /*-------------------RF frequency----------------------*/
 //Match frequency to the hardware version of the radio used.
 #ifndef RF_FREQUENCY
-#  define RF_FREQUENCY 433.92
+#  define RF_FREQUENCY 433.92f
 #endif
 
 /**
@@ -199,13 +201,6 @@ const char parameters[51][4][24] = {
  * 4 = ZgatewayRF2
  */
 
-struct RFConfig_s {
-  float frequency;
-  int rssiThreshold;
-  int newOokThreshold;
-  int activeReceiver;
-};
-
 #define ACTIVE_NONE     -1
 #define ACTIVE_RECERROR 0
 #define ACTIVE_PILIGHT  1
@@ -213,7 +208,17 @@ struct RFConfig_s {
 #define ACTIVE_RTL      3
 #define ACTIVE_RF2      4
 
-RFConfig_s RFConfig;
+#ifdef ZgatewayRF
+#  define ACTIVE_RECEIVER ACTIVE_RF
+#elif defined(ZgatewayRF2)
+#  define ACTIVE_RECEIVER ACTIVE_RF2
+#elif defined(ZgatewayPilight)
+#  define ACTIVE_RECEIVER ACTIVE_PILIGHT
+#elif defined(ZgatewayRTL_433)
+#  define ACTIVE_RECEIVER ACTIVE_RTL
+#else
+#  define ACTIVE_RECEIVER ACTIVE_NONE
+#endif
 
 /*-------------------CC1101 DefaultTXPower----------------------*/
 //Adjust the default TX-Power for sending radio if ZradioCC1101 is used.
@@ -226,7 +231,7 @@ RFConfig_s RFConfig;
 #ifndef RF_RECEIVER_GPIO
 #  ifdef ESP8266
 #    define RF_RECEIVER_GPIO 0 // D3 on nodemcu // put 4 with rf bridge direct mod
-#  elif ESP32
+#  elif defined(ESP32)
 #    define RF_RECEIVER_GPIO 27 // D27 on DOIT ESP32
 #  endif
 #endif
@@ -234,7 +239,7 @@ RFConfig_s RFConfig;
 #ifndef RF_EMITTER_GPIO
 #  ifdef ESP8266
 #    define RF_EMITTER_GPIO 3 // RX on nodemcu if it doesn't work with 3, try with 4 (D2) // put 5 with rf bridge direct mod
-#  elif ESP32
+#  elif defined(ESP32)
 #    define RF_EMITTER_GPIO 12 // D12 on DOIT ESP32
 #  else
 //IMPORTANT NOTE: On arduino UNO connect IR emitter pin to D9 , comment #define IR_USE_TIMER2 and uncomment #define IR_USE_TIMER1 on library <library>IRremote/boarddefs.h so as to free pin D3 for RF RECEIVER PIN

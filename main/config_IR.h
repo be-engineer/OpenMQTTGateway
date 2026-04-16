@@ -26,10 +26,12 @@
 #ifndef config_IR_h
 #define config_IR_h
 
+#include "TheengsCommon.h"
+
 extern void setupIR();
-extern void IRtoMQTT();
-extern void MQTTtoIR(char* topicOri, char* datacallback);
-extern void MQTTtoIR(char* topicOri, JsonObject& RFdata);
+extern void IRtoX();
+extern void XtoIR(const char* topicOri, const char* datacallback);
+extern void XtoIR(const char* topicOri, JsonObject& RFdata);
 /*-------------------IR topics & parameters----------------------*/
 //IR MQTT Subjects
 #define subjectGTWIRtoMQTT     "/IRtoMQTT"
@@ -182,7 +184,7 @@ extern void MQTTtoIR(char* topicOri, JsonObject& RFdata);
 #ifndef IR_RECEIVER_GPIO
 #  ifdef ESP8266
 #    define IR_RECEIVER_GPIO 2 //D4 /replace by 4 with sonoff rf bridge
-#  elif ESP32
+#  elif defined(ESP32)
 #    define IR_RECEIVER_GPIO 26
 #  endif
 #endif
@@ -190,7 +192,7 @@ extern void MQTTtoIR(char* topicOri, JsonObject& RFdata);
 #ifndef IR_EMITTER_GPIO
 #  ifdef ESP8266
 #    define IR_EMITTER_GPIO 16 //D0/ replace by 0 (D3) if you use IR LOLIN controller shield /replace by 5 with sonoff rf bridge
-#  elif ESP32
+#  elif defined(ESP32)
 #    define IR_EMITTER_GPIO 14
 #  endif
 #endif

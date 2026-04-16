@@ -26,11 +26,8 @@
 #ifndef config_WeatherStation_h
 #define config_WeatherStation_h
 
-#include <Arduino.h>
-#include <ArduinoJson.h>
-
 extern void setupWeatherStation();
-extern void ZgatewayWeatherStationtoMQTT();
+extern void ZgatewayWeatherStationtoX();
 /*----------------------------USER PARAMETERS-----------------------------*/
 /*-------------DEFINE YOUR MQTT PARAMETERS BELOW----------------*/
 #define subjectRFtoMQTT "/433toMQTT"
@@ -39,7 +36,7 @@ extern void ZgatewayWeatherStationtoMQTT();
 #ifndef RF_WS_RECEIVER_GPIO
 #  ifdef ESP8266
 #    define RF_WS_RECEIVER_GPIO 0 // D3 on nodemcu // put 4 with rf bridge direct mod
-#  elif ESP32
+#  elif defined(ESP32)
 #    define RF_WS_RECEIVER_GPIO 27 // D27 on DOIT ESP32
 #  endif
 #endif

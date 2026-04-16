@@ -75,13 +75,11 @@ Once the data has been transmitted to the MQTT broker, it can be easily integrat
 Examples of compatible sensors among [our list](https://decoder.theengs.io/devices/devices_by_brand.html: Mi Flora, Mi jia, LYWDS02, LYWSD03MMC, ClearGrass, Mi scale, iBBQ, TPMS
 
 ## Receiving signals from BLE devices for Device Tracker detection
-The gateway will detect BLE trackers from Tile, Nut, TagIt and iTag, as well as other devices with additional properties decoding like Mi Band, Amazfit, RuuviTag and others indicated as Device Trackers in the [compatible BLE devices list](https://decoder.theengs.io/devices/devices.html), and automatically create a device tracker entity following the Home Assistant discovery convention (if auto discovery is activated).
+The gateway will detect BLE trackers from Tile, Nut, TagIt, iTAG, Gigaset G-Tag, TicWatch GTH (Pro), Teltonika FMT100 vehicle tracker and Bosch Nyon eBike computers, as well as other devices with additional properties decoding like Mi Band, Amazfit, RuuviTag and others indicated as Device Trackers in the [compatible BLE devices list](https://decoder.theengs.io/devices/devices.html), and automatically create a device tracker entity following the Home Assistant discovery convention (if auto discovery is activated).
 
 The devicen tracker entity created can be attached to a person to leverage presence detection. The `away` or `not home` state is triggered if the BLE tracker is not detected during the timer defined by `presenceawaytimer`.
  
 ![Away home Home assistant view](../img/OpenMQTTGateway-BLE-tracker-Home-Assistant.png)
-
-If you have multiple gateways, your BLE trackers may not be detected temporary by one gateway but still by the others. In this case you will see the tracker appears offline briefly and online again once it is detected by the others gateways.
 
 By default `presenceawaytimer` is set to 120s, you can change it from the slider in your controller or with the following command (ms)
 
@@ -126,8 +124,6 @@ A white list is a list of MAC addresses permitted to be published by OMG
 to set white list
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT/config -m '{"white-list":["01:23:14:55:16:15","4C:65:77:88:9C:79","4C:65:A6:66:3C:79"]}'`
 
-Note: if you want to filter (white or black list) on BLE sensors that are auto discovered, you need to wait for the discovery before applying the white or black list, or temporarily disable it:
-
 to temporarily disable white/black list
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT/config -m '{"ignoreWBlist":true}'`
 
@@ -143,7 +139,6 @@ So as to keep your white/black list persistent you can publish it with the retai
 
 ## Setting the time between BLE scans and force a scan (available with HA discovery)
 
-If you want to change the time between readings you can change the interval by MQTT. `adaptivescan` parameter needs to be `false` for the `interval` change to be taken into account.
 Example if you want the BLE to scan every 66 seconds:
 
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT/config -m '{"interval":66000}'`
@@ -151,6 +146,8 @@ Example if you want the BLE to scan every 66 seconds:
 you can also force a scan to be done by the following command:
 
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT/config -m '{"interval":0}'`
+
+Changing the interval between scans will deactivate adaptive scanning.
 
 ::: tip
 With Home Assistant, this command is directly available through MQTT auto discovery as a switch into the HASS OpenMQTTGateway device entities list.
@@ -210,7 +207,7 @@ An overview with background information to better understand the different setti
 
 **Active scanning:** With this scanning mode the gateway sends out requests for sensor broadcasts first, before then picking up the broadcast advertisement data. Some devices require this request before they send out all data in their broadcasts. The interval for this active scanning with request first is set by [{"intervalacts":300000}](#setting-the-time-between-active-scanning)
 
-If adaptive scanning is set to false and you want to manually set these intervals, setting [Publishing advertisement and advanced data](#advanced-publishing-advertisement-and-advanced-data-default-false) to true will show you additional data about which of your devices require active scanning and/or continuous scanning, so that you can tune these setting to your devices and your individual requirements of their data.
+Setting [Publishing advertisement and advanced data](#advanced-publishing-advertisement-and-advanced-data-default-false) to true will show you additional data about which of your devices require active scanning and/or continuous scanning, so that you can tune these setting to your devices and your individual requirements of their data.
 
 **"cont":true** - the device requires continuous scanning. If passive ({"interval":100}) or active ({"intervalacts":100}) depends on the additional device specification.
 
@@ -220,9 +217,11 @@ If adaptive scanning is set to false and you want to manually set these interval
 
 If you have passive scanning activated, but also have some devices which require active scanning, this defines the time interval between two intermittent active scans.
 
-If you want to change the time between active scans you can change it by MQTT, `adaptivescan` parameter needs to be `false` for the `intervalacts` change to be taken into account. Example for setting the active scan interval time to every 5 minutes:
+Example for setting the active scan interval time to every 5 minutes:
 
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT/config -m '{"intervalacts":300000}'`
+
+Changing the active scan interval will deactivate adaptive scanning.
 
 ::: warning Note
 The active scan interval `intervalacts` can only bet set equal to or higher than the passive scan interval `interval`, as any lower value would not make any sense.
@@ -315,6 +314,11 @@ By the way, if you want to load the default built-in configuration (on any board
 
 `mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT/config -m '{"init":true}'`
 Note that it will not change the stored configuration, `erase` or `save` is still needed to overwrite the saved configuration.
+
+## Controlling devices
+::: tip
+To control devices reliably, set the interval between scans to at least 5 seconds and the scan duration to 1 second to ensure commands are successfully transmitted to your devices.
+:::
 
 ## Read/write BLE characteristics over MQTT
 
@@ -486,6 +490,15 @@ mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT -m '{
   }'
 ```
 
+### Set the SwitchBot Blind Tilt to Stop:
+```
+mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT -m '{
+  "model_id":"W270160X",
+  "tilt":"stop",
+  "id":"AA:BB:CC:DD:EE:FF"
+  }'
+```
+
 ### Response (assuming success):
 The Switchbot Blind Tilt response :
 ```
@@ -494,6 +507,58 @@ The Switchbot Blind Tilt response :
   "tilt":55,
   "open":90,
   "direction":"up"
+}
+```
+
+## SwitchBot Curtain (2/3) control (available with HA discovery)
+
+SwitchBot Curtain (2/3) devices are automatically discovered and available as a device in the settings Home Assistant Settings menu. The following commands are supported:
+* Set a percentage
+
+The device can also be controlled over MQTT with a simplified BLE write command.
+
+### Set the SwitchBot Curtain state to OPEN:
+```
+mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT -m '{
+  "model_id":"W070160X",
+  "position":"open",
+  "id":"AA:BB:CC:DD:EE:FF"
+  }'
+```
+
+### Set the SwitchBot Curtain state to CLOSE:
+```
+mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT -m '{
+  "model_id":"W070160X",
+  "position":"close",
+  "id":"AA:BB:CC:DD:EE:FF"
+  }'
+```
+
+### Set the SwitchBot Curtain to a percentage (0-100):
+```
+mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT -m '{
+  "model_id":"W070160X",
+  "position":55,
+  "id":"AA:BB:CC:DD:EE:FF"
+  }'
+```
+
+### Set the SwitchBot Curtain to Stop:
+```
+mosquitto_pub -t home/OpenMQTTGateway/commands/MQTTtoBT -m '{
+  "model_id":"W070160X",
+  "position":"stop",
+  "id":"AA:BB:CC:DD:EE:FF"
+  }'
+```
+
+### Response (assuming success):
+The Switchbot Curtain response :
+```
+{
+  "id":"AA:BB:CC:DD:EE:FF",
+  "position":55,
 }
 ```
 

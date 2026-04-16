@@ -26,10 +26,12 @@
 #ifndef config_LORA_h
 #define config_LORA_h
 
+#include "TheengsCommon.h"
+
 extern void setupLORA();
-extern void LORAtoMQTT();
-extern void MQTTtoLORA(char* topicOri, char* datacallback);
-extern void MQTTtoLORA(char* topicOri, JsonObject& RFdata);
+extern void LORAtoX();
+extern void XtoLORA(const char* topicOri, const char* datacallback);
+extern void XtoLORA(const char* topicOri, JsonObject& RFdata);
 /*----------------------LORA topics & parameters-------------------------*/
 #define subjectLORAtoMQTT    "/LORAtoMQTT"
 #define subjectMQTTtoLORA    "/commands/MQTTtoLORA"
@@ -112,6 +114,7 @@ struct LORAConfig_s {
 };
 
 #ifdef ZmqttDiscovery
+#  include "config_mqttDiscovery.h"
 extern void launchLORADiscovery(bool overrideDiscovery);
 // This structure stores the entities of the devices and is they have been discovered or not
 // The uniqueId is composed of the device id + the key
@@ -127,11 +130,11 @@ struct LORAdevice {
 
 const char LORAparameters[5][4][12] = {
     // LORA key, name, unit, device_class
-    {"tempc", "temperature", "°C", "temperature"},
-    {"hum", "humidity", "%", "humidity"},
-    {"moi", "moisture", "%", "humidity"},
-    {"batt", "battery", "%", "battery"},
-    {"count", "counter", "L", "water"}};
+    {"tempc", HASS_CLASS_TEMPERATURE, HASS_UNIT_CELSIUS, HASS_CLASS_TEMPERATURE},
+    {"hum", HASS_CLASS_HUMIDITY, HASS_UNIT_PERCENT, HASS_CLASS_HUMIDITY},
+    {"moi", "moisture", HASS_UNIT_PERCENT, HASS_CLASS_HUMIDITY},
+    {"batt", HASS_CLASS_BATTERY, HASS_UNIT_PERCENT, HASS_CLASS_BATTERY},
+    {"count", HASS_CLASS_WATER, HASS_UNIT_LITER, HASS_CLASS_WATER}};
 
 #endif
 
